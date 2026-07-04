@@ -86,7 +86,6 @@ struct RecordingsSheetView: View {
     @State private var showingVideoRecorder = false
     @State private var playingVideoNote: Recording? = nil
     @State private var recordingToDelete: Recording? = nil
-    @State private var showDeleteConfirm = false
 
     private var audioRecordings: [Recording] { song.recordings.filter { $0.kind == .audio } }
     private var videoNotes: [Recording] { song.recordings.filter { $0.kind == .video } }
@@ -253,7 +252,12 @@ struct RecordingsSheetView: View {
                     }
                 }
             }
+
+            if let recording = recordingToDelete {
+                recordingDeleteOverlay(for: recording)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: recordingToDelete?.id)
         .presentationDetents([.fraction(0.55), .large])
         .presentationBackground(Color.black)
         .sheet(isPresented: $showingVideoRecorder) {
@@ -267,11 +271,8 @@ struct RecordingsSheetView: View {
             VideoNoteSheet(
                 recording: note,
                 onDelete: {
-                    playingVideoNote = nil
                     recordingToDelete = note
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showDeleteConfirm = true
-                    }
+                    playingVideoNote = nil
                 },
                 isPresented: Binding(
                     get: { playingVideoNote?.id == note.id },
@@ -279,8 +280,17 @@ struct RecordingsSheetView: View {
                 )
             )
         }
-        .sheet(isPresented: $showDeleteConfirm) {
-            if let recording = recordingToDelete {
+    }
+
+    @ViewBuilder
+    private func recordingDeleteOverlay(for recording: Recording) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .onTapGesture { recordingToDelete = nil }
+
+            VStack(spacing: 0) {
+                Spacer()
                 DeleteConfirmSheet(
                     title: formatDate(recording.createdAt),
                     heading: recording.kind == .video ? "Delete Video Note" : "Delete Recording",
@@ -288,16 +298,14 @@ struct RecordingsSheetView: View {
                     onDelete: {
                         audioVM.delete(recording)
                         onDeleteRecording(recording)
-                        showDeleteConfirm = false
                         recordingToDelete = nil
                     },
-                    onCancel: {
-                        showDeleteConfirm = false
-                        recordingToDelete = nil
-                    }
+                    onCancel: { recordingToDelete = nil }
                 )
+                .frame(maxHeight: 340)
             }
         }
+        .transition(.opacity)
     }
 
     // MARK: - Video note thumbnail
@@ -413,10 +421,7 @@ struct RecordingsSheetView: View {
 
             Spacer()
 
-            Button(action: {
-                recordingToDelete = recording
-                showDeleteConfirm = true
-            }) {
+            Button(action: { recordingToDelete = recording }) {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.2))

@@ -54,8 +54,8 @@ struct ChordSheetView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 24) {
-                Text("Add Annotation").foregroundStyle(.white).font(.headline).kerning(1)
-                Text("Type a word or phrase to place above a word in your lyrics.")
+                Text("Add a Chord").foregroundStyle(.white).font(.headline).kerning(1)
+                Text("Type a chord to place above a word in your lyrics.")
                     .foregroundStyle(.gray).font(.system(size: 13)).multilineTextAlignment(.center).padding(.horizontal)
                 TextField("e.g. [Em]", text: $viewModel.annotationText)
                     .font(.system(size: 15, design: .monospaced)).padding()

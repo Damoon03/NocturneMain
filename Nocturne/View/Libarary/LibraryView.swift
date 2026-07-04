@@ -15,7 +15,6 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var shareItems: [Any]? = nil
     @State private var songToDelete: Song? = nil
-    @State private var showDeleteConfirm = false
     @State private var showingProfile = false
     @State private var showingCreateFolder = false
     @State private var movingSong: Song? = nil
@@ -56,6 +55,10 @@ struct LibraryView: View {
                         song: song,
                         fragmentsVM: fragmentsViewModel,
                         settings: settings,
+                        onSave: { updatedSong in
+                            libraryViewModel.update(updatedSong)
+                            settings.trackWordCount(for: updatedSong)
+                        },
                         onDismiss: { updatedSong in
                             libraryViewModel.update(updatedSong)
                             settings.trackWordCount(for: updatedSong)
@@ -105,14 +108,15 @@ struct LibraryView: View {
         .sheet(isPresented: Binding(get: { shareItems != nil }, set: { if !$0 { shareItems = nil } })) {
             if let items = shareItems { ShareSheet(items: items) }
         }
-        .sheet(isPresented: $showDeleteConfirm) {
-            if let song = songToDelete {
-                DeleteConfirmSheet(
-                    title: song.title.isEmpty ? "Untitled" : song.title,
-                    onDelete: { libraryViewModel.softDelete(song); showDeleteConfirm = false; songToDelete = nil },
-                    onCancel: { showDeleteConfirm = false; songToDelete = nil }
-                )
-            }
+        .sheet(item: $songToDelete) { song in
+            DeleteConfirmSheet(
+                title: song.title.isEmpty ? "Untitled" : song.title,
+                onDelete: {
+                    libraryViewModel.softDelete(song)
+                    songToDelete = nil
+                },
+                onCancel: { songToDelete = nil }
+            )
         }
     }
 
@@ -144,7 +148,7 @@ struct LibraryView: View {
     private var tabSwitcher: some View {
         HStack(spacing: 8) {
             tabButton(.songs, label: "Songs", count: libraryViewModel.songs.filter { !$0.isDeleted }.count)
-            tabButton(.fragments, label: "Fragments", count: fragmentsViewModel.fragments.count)
+            tabButton(.fragments, label: "Fragments", count: fragmentsViewModel.activeCount)
             Spacer()
         }
         .padding(.horizontal, 28).padding(.bottom, 16)
@@ -255,7 +259,7 @@ struct LibraryView: View {
             .listRowBackground(Color.clear)
             .listRowSeparatorTint(.white.opacity(0.06))
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) { songToDelete = song; showDeleteConfirm = true } label: {
+                Button(role: .destructive) { songToDelete = song } label: {
                     Label("Delete", systemImage: "trash")
                 }.tint(Color(red: 0.8, green: 0.1, blue: 0.1))
                 Button { shareSong(song) } label: { Label("Share PDF", systemImage: "square.and.arrow.up") }
@@ -270,7 +274,7 @@ struct LibraryView: View {
                     Button { shareItems = items } label: { Label("Share Link", systemImage: "link") }
                 }
                 Divider()
-                Button(role: .destructive) { songToDelete = song; showDeleteConfirm = true } label: {
+                Button(role: .destructive) { songToDelete = song } label: {
                     Label("Delete", systemImage: "trash")
                 }
             } preview: { SongContextPreview(song: song) }

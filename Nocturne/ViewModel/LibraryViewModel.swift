@@ -12,9 +12,12 @@ import SwiftUI
 class LibraryViewModel: ObservableObject {
     @Published var songs: [Song] = []
     @Published var folders: [SongFolder] = []
+    @Published var lastSaveError: String?
 
-    private let songsKey  = "nocturne_songs"
+    private let songsKey = "nocturne_songs"
     private let foldersKey = "nocturne_folders"
+    private let songsFile = "songs.json"
+    private let foldersFile = "folders.json"
 
     /// Songs visible in the main library (not deleted, not in any folder when
     /// folderID == nil, or matching a specific folder).
@@ -145,24 +148,34 @@ class LibraryViewModel: ObservableObject {
     }
 
     private func save() {
-        if let encoded = try? JSONEncoder().encode(songs) {
-            UserDefaults.standard.set(encoded, forKey: songsKey)
+        do {
+            try DataPersistence.save(songs, to: songsFile)
+            lastSaveError = nil
+        } catch {
+            lastSaveError = error.localizedDescription
         }
     }
 
     private func saveFolders() {
-        if let encoded = try? JSONEncoder().encode(folders) {
-            UserDefaults.standard.set(encoded, forKey: foldersKey)
+        do {
+            try DataPersistence.save(folders, to: foldersFile)
+            lastSaveError = nil
+        } catch {
+            lastSaveError = error.localizedDescription
         }
     }
 
     private func load() {
-        if let data = UserDefaults.standard.data(forKey: songsKey),
-           let decoded = try? JSONDecoder().decode([Song].self, from: data) {
+        if let decoded: [Song] = DataPersistence.loadOrMigrate(
+            userDefaultsKey: songsKey,
+            filename: songsFile
+        ) {
             songs = decoded
         }
-        if let data = UserDefaults.standard.data(forKey: foldersKey),
-           let decoded = try? JSONDecoder().decode([SongFolder].self, from: data) {
+        if let decoded: [SongFolder] = DataPersistence.loadOrMigrate(
+            userDefaultsKey: foldersKey,
+            filename: foldersFile
+        ) {
             folders = decoded
         }
     }

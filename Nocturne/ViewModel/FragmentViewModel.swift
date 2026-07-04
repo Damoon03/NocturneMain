@@ -11,8 +11,12 @@ import Combine
 class FragmentsViewModel: ObservableObject {
     @Published var fragments: [Fragment] = []
     @Published var filterType: FragmentType? = nil
+    @Published var lastSaveError: String?
 
     private let saveKey = "nocturne_fragments"
+    private let fragmentsFile = "fragments.json"
+
+    var activeCount: Int { fragments.filter { !$0.isDeleted }.count }
 
     init() {
         load()
@@ -133,14 +137,19 @@ class FragmentsViewModel: ObservableObject {
 
     // MARK: - Persistence
     private func save() {
-        if let encoded = try? JSONEncoder().encode(fragments) {
-            UserDefaults.standard.set(encoded, forKey: saveKey)
+        do {
+            try DataPersistence.save(fragments, to: fragmentsFile)
+            lastSaveError = nil
+        } catch {
+            lastSaveError = error.localizedDescription
         }
     }
 
     private func load() {
-        if let data = UserDefaults.standard.data(forKey: saveKey),
-           let decoded = try? JSONDecoder().decode([Fragment].self, from: data) {
+        if let decoded: [Fragment] = DataPersistence.loadOrMigrate(
+            userDefaultsKey: saveKey,
+            filename: fragmentsFile
+        ) {
             fragments = decoded
         }
     }

@@ -24,6 +24,11 @@ class SettingsStore: ObservableObject {
         }
     }
 
+    // MARK: - Security
+    @Published var biometricLockEnabled: Bool {
+        didSet { UserDefaults.standard.set(biometricLockEnabled, forKey: "nocturne_biometricLock") }
+    }
+
     // MARK: - Stats tracking
     /// Daily word counts keyed by "yyyy-MM-dd"
     @Published var dailyWordCounts: [String: Int] {
@@ -37,7 +42,7 @@ class SettingsStore: ObservableObject {
         let storedSize = UserDefaults.standard.double(forKey: "nocturne_fontSize")
         fontSize = storedSize < 10 ? 13 : storedSize
 
-        selectedIconName = UserDefaults.standard.string(forKey: "nocturne_appIcon")
+        biometricLockEnabled = UserDefaults.standard.bool(forKey: "nocturne_biometricLock")
 
         if let data = UserDefaults.standard.data(forKey: "nocturne_dailyWordCounts"),
            let decoded = try? JSONDecoder().decode([String: Int].self, from: data) {
@@ -45,6 +50,12 @@ class SettingsStore: ObservableObject {
         } else {
             dailyWordCounts = [:]
         }
+
+        var storedIconName = UserDefaults.standard.string(forKey: "nocturne_appIcon")
+        if storedIconName != nil, !Self.supportsAlternateIcons {
+            storedIconName = nil
+        }
+        selectedIconName = storedIconName
     }
 
     // MARK: - Word count tracking
@@ -86,15 +97,16 @@ class SettingsStore: ObservableObject {
 
     // MARK: - App icons
     static let availableIcons: [(name: String?, label: String)] = [
-        (nil,              "Default"),
-        ("IconMoonWhite",  "Moon — White"),
-        ("IconMoonAmber",  "Moon — Amber"),
-        ("IconMoonBlue",   "Moon — Blue"),
-        ("IconMoonPurple", "Moon — Purple"),
+        (nil, "Default"),
     ]
 
+    static var supportsAlternateIcons: Bool {
+        guard UIApplication.shared.supportsAlternateIcons else { return false }
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") != nil
+    }
+
     private func applyIcon() {
-        guard UIApplication.shared.supportsAlternateIcons else { return }
+        guard Self.supportsAlternateIcons else { return }
         UIApplication.shared.setAlternateIconName(selectedIconName) { _ in }
     }
 

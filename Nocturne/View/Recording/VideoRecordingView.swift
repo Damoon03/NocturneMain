@@ -59,8 +59,6 @@ class VideoRecorderViewModel: NSObject, ObservableObject {
     private var outputURL: URL?
     private var onFinish: ((URL, TimeInterval) -> Void)?
 
-    static let maxDuration: TimeInterval = 60
-
     override init() {
         super.init()
         checkPermissions()
@@ -101,8 +99,7 @@ class VideoRecorderViewModel: NSObject, ObservableObject {
         // Output
         if session.canAddOutput(movieOutput) {
             session.addOutput(movieOutput)
-            // Cap at maxDuration automatically
-            movieOutput.maxRecordedDuration = CMTime(seconds: Self.maxDuration, preferredTimescale: 600)
+            movieOutput.maxRecordedDuration = .invalid
         }
 
         session.commitConfiguration()
@@ -127,7 +124,6 @@ class VideoRecorderViewModel: NSObject, ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 self.recordingTime += 0.1
-                if self.recordingTime >= Self.maxDuration { self.stopRecording() }
             }
         }
     }
@@ -168,8 +164,6 @@ struct VideoRecorderView: View {
     @Binding var isPresented: Bool
 
     @StateObject private var vm = VideoRecorderViewModel()
-    @State private var progressValue: Double = 0
-    @State private var progressTimer: Timer? = nil
 
     var body: some View {
         ZStack {
@@ -221,17 +215,14 @@ struct VideoRecorderView: View {
                     // Recording progress ring
                     if vm.isRecording {
                         Circle()
-                            .trim(from: 0, to: progressValue)
-                            .stroke(Color.red.opacity(0.8), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .stroke(Color.red.opacity(0.8), lineWidth: 3)
                             .frame(width: 264, height: 264)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.linear(duration: 0.1), value: progressValue)
                     }
                 }
                 .padding(.bottom, 36)
 
                 // Timer
-                Text(vm.isRecording ? formattedTime(vm.recordingTime) : "Max 60s")
+                Text(vm.isRecording ? formattedTime(vm.recordingTime) : "Tap to record")
                     .font(.system(size: 13, weight: .light, design: .monospaced))
                     .foregroundStyle(vm.isRecording ? .red.opacity(0.8) : .white.opacity(0.2))
                     .padding(.bottom, 36)
@@ -240,7 +231,6 @@ struct VideoRecorderView: View {
                 Button(action: {
                     if vm.isRecording {
                         vm.stopRecording()
-                        stopProgressTimer()
                     } else {
                         vm.startRecording(songID: songID) { url, duration in
                             let fileName = url.lastPathComponent
@@ -253,7 +243,6 @@ struct VideoRecorderView: View {
                             onSave(recording)
                             isPresented = false
                         }
-                        startProgressTimer()
                     }
                 }) {
                     ZStack {
@@ -287,29 +276,18 @@ struct VideoRecorderView: View {
         .onDisappear {
             vm.stopRecording()
             vm.stopSession()
-            stopProgressTimer()
         }
-    }
-
-    private func startProgressTimer() {
-        progressValue = 0
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            Task { @MainActor in
-                progressValue = min(vm.recordingTime / VideoRecorderViewModel.maxDuration, 1.0)
-            }
-        }
-    }
-
-    private func stopProgressTimer() {
-        progressTimer?.invalidate()
-        progressTimer = nil
-        progressValue = 0
     }
 
     private func formattedTime(_ t: TimeInterval) -> String {
-        let m = Int(t) / 60
-        let s = Int(t) % 60
+        let total = Int(t)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
         let tenth = Int((t * 10).truncatingRemainder(dividingBy: 10))
+        if h > 0 {
+            return String(format: "%d:%02d:%02d.%d", h, m, s, tenth)
+        }
         return String(format: "%d:%02d.%d", m, s, tenth)
     }
 }

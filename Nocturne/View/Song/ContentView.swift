@@ -24,15 +24,25 @@ struct ContentView: View {
     @State private var noteText: String = ""
     @State private var shareItems: [Any]? = nil
 
+    var onSave: ((Song) -> Void)?
     var onDismiss: ((Song) -> Void)?
+
+    @Environment(\.scenePhase) private var scenePhase
 
     let lineSpacing: CGFloat = 10
     var fontSize: CGFloat { settings.fontSize }
 
-    init(song: Song, fragmentsVM: FragmentsViewModel, settings: SettingsStore, onDismiss: ((Song) -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: SongViewModel(song: song, onUpdate: nil))
+    init(
+        song: Song,
+        fragmentsVM: FragmentsViewModel,
+        settings: SettingsStore,
+        onSave: ((Song) -> Void)? = nil,
+        onDismiss: ((Song) -> Void)? = nil
+    ) {
+        _viewModel = StateObject(wrappedValue: SongViewModel(song: song, onUpdate: onSave))
         self.fragmentsVM = fragmentsVM
         self.settings = settings
+        self.onSave = onSave
         self.onDismiss = onDismiss
     }
 
@@ -61,7 +71,9 @@ struct ContentView: View {
                             .font(.system(size: 18, weight: .light))
                             .foregroundStyle(.white.opacity(0.4))
                     }
+                    .accessibilityLabel("Back to library")
                     Spacer()
+                    saveStatusLabel
                     Button(action: {
                         HapticManager.impact(.light)
                         if let items = SongShareOptions.linkItems(for: viewModel.song) {
@@ -255,6 +267,27 @@ struct ContentView: View {
         }
         .onAppear {
             withAnimation(.easeIn(duration: 0.9)) { lyricsOpacity = 1 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background || phase == .inactive {
+                onSave?(viewModel.song)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var saveStatusLabel: some View {
+        switch viewModel.saveState {
+        case .saved:
+            EmptyView()
+        case .saving:
+            Text("Saving…")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.25))
+        case .unsaved:
+            Text("Unsaved")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.2))
         }
     }
 

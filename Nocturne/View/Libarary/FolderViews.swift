@@ -114,7 +114,6 @@ struct FolderDetailView: View {
     var onNavigateToSong: (UUID) -> Void
 
     @State private var songToDelete: Song? = nil
-    @State private var showDeleteConfirm = false
     @State private var movingSong: Song? = nil
 
     private var songs: [Song] { libraryVM.songs(inFolder: folder.id) }
@@ -155,7 +154,7 @@ struct FolderDetailView: View {
                                 .listRowSeparatorTint(.white.opacity(0.06))
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
-                                        songToDelete = song; showDeleteConfirm = true
+                                        songToDelete = song
                                     } label: { Label("Delete", systemImage: "trash") }
                                         .tint(Color(red: 0.8, green: 0.1, blue: 0.1))
                                     Button { movingSong = song } label: { Label("Move", systemImage: "folder") }
@@ -170,21 +169,15 @@ struct FolderDetailView: View {
         .sheet(item: $movingSong) { song in
             MoveSongToFolderSheet(song: song, libraryVM: libraryVM) { movingSong = nil }
         }
-        .sheet(isPresented: $showDeleteConfirm) {
-            if let song = songToDelete {
-                DeleteConfirmSheet(
-                    title: song.title.isEmpty ? "Untitled" : song.title,
-                    onDelete: {
-                        libraryVM.softDelete(song)
-                        showDeleteConfirm = false
-                        songToDelete = nil
-                    },
-                    onCancel: {
-                        showDeleteConfirm = false
-                        songToDelete = nil
-                    }
-                )
-            }
+        .sheet(item: $songToDelete) { song in
+            DeleteConfirmSheet(
+                title: song.title.isEmpty ? "Untitled" : song.title,
+                onDelete: {
+                    libraryVM.softDelete(song)
+                    songToDelete = nil
+                },
+                onCancel: { songToDelete = nil }
+            )
         }
     }
 

@@ -143,8 +143,30 @@ struct ProfileView: View {
 
                     Spacer().frame(height: 14)
 
+                    // ── Security ───────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeader("Security")
+                        Toggle(isOn: $settings.biometricLockEnabled) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("App lock")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.white.opacity(0.75))
+                                Text("Require Face ID or passcode when opening Nocturne")
+                                    .font(.system(size: 11, weight: .light))
+                                    .foregroundStyle(.white.opacity(0.3))
+                            }
+                        }
+                        .tint(.white.opacity(0.6))
+                        .onChange(of: settings.biometricLockEnabled) { _, _ in HapticManager.selection() }
+                    }
+                    .padding(20)
+                    .background(cardBG)
+                    .padding(.horizontal, 20)
+
+                    Spacer().frame(height: 14)
+
                     // ── App icon ───────────────────────────────────────
-                    if UIApplication.shared.supportsAlternateIcons {
+                    if SettingsStore.supportsAlternateIcons && SettingsStore.availableIcons.count > 1 {
                         VStack(alignment: .leading, spacing: 16) {
                             sectionHeader("App icon")
                             ScrollView(.horizontal, showsIndicators: false) {
