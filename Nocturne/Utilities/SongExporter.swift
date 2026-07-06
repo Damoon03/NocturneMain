@@ -4,14 +4,6 @@
 //
 //  Created by Damoon saber on 3/31/1405 AP.
 //
-//  Builds a chord chart (lyrics with chords positioned above their words)
-//  from a Song's STRUCTURED data — song.chords (lineIndex, wordIndex,
-//  names) and song.sectionLabels — for both plain-text and PDF export.
-//
-//  This is a fresh, independent implementation, NOT a revival of the old
-//  ⌜chord⌝ string-marker system. It only reads structured data and
-//  produces an output string/PDF; it never writes back into Song, so it
-//  carries none of the risk that caused the earlier alignment bugs.
 //
 
 import Foundation
@@ -21,10 +13,6 @@ struct SongExporter {
 
     // MARK: - Plain text export
 
-    /// Builds a classic chord-chart text layout: a chord line (chords
-    /// positioned above their word using space-padding, computed fresh
-    /// from word character offsets) immediately followed by its lyric
-    /// line. Section labels render as bracketed headers, e.g. [Chorus].
     static func plainText(for song: Song) -> String {
         var output = ""
         if !song.title.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -53,11 +41,6 @@ struct SongExporter {
         return output
     }
 
-    /// Builds a single chord line as plain text, with each chord's name
-    /// padded to start at the character column where its target word
-    /// begins. Computed fresh from the lyric string each time — this
-    /// string is never stored or re-parsed, it only exists for the
-    /// duration of building export output.
     private static func chordLineText(for lyric: String, chords: [Chord]) -> String {
         let words = lyric.components(separatedBy: " ").filter { !$0.isEmpty }
 
@@ -82,12 +65,6 @@ struct SongExporter {
 
     // MARK: - PDF export
 
-    /// Renders the same chord chart as a single- or multi-page PDF, using
-    /// UIGraphicsPDFRenderer. Chords render as small bordered capsules
-    /// (matching the in-app visual style) positioned above their word
-    /// using Core Text-measured string widths — not assumed character
-    /// widths — so the PDF's alignment doesn't inherit any of the
-    /// measurement fragility that affected on-screen rendering earlier.
     static func pdf(for song: Song) -> Data {
         let pageWidth: CGFloat = 612   // US Letter, 72pt/inch
         let pageHeight: CGFloat = 792
@@ -161,10 +138,6 @@ struct SongExporter {
         return data
     }
 
-    /// Draws one chord row above a lyric line, positioning each chord
-    /// capsule using REAL measured string widths (NSString sizing) for
-    /// every word up to the target — not character counts — so PDF
-    /// alignment is accurate regardless of font metrics.
     private static func drawChordRow(_ chords: [Chord], lyric: String, font: UIFont, chordFont: UIFont, origin: CGPoint) {
         let words = lyric.components(separatedBy: " ").filter { !$0.isEmpty }
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width

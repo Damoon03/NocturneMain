@@ -111,7 +111,6 @@ struct SharedSongView: View {
     private let fontSize: CGFloat = 13
 
     @State private var wordFrames: [String: CGRect] = [:]
-    @State private var chordWidths: [UUID: CGFloat] = [:]
 
     var body: some View {
         ZStack {
@@ -119,11 +118,9 @@ struct SharedSongView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
+                    Button("Close", systemImage: "xmark") { onDismiss() }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.white.opacity(0.4))
                     Spacer()
                     VStack(spacing: 2) {
                         Text(payload.title.isEmpty ? "Untitled" : payload.title)
@@ -161,83 +158,20 @@ struct SharedSongView: View {
                         .fill(Color.white.opacity(0.04))
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.07), lineWidth: 0.5))
 
-                    lyricsDisplayView
+                    LyricsWithChordsView(
+                        viewModel: vm,
+                        fontSize: fontSize,
+                        lineSpacing: lineSpacing,
+                        coordinateSpaceName: "sharedCoord",
+                        wordFrames: $wordFrames,
+                        isInteractive: false
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
-            }
-        }
-    }
-
-    // MARK: - Lyrics display (mirrors ContentView.lyricsDisplayView, read-only)
-    private var lyricsDisplayView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: lineSpacing) {
-                ForEach(Array(vm.lyricsLines.enumerated()), id: \.offset) { lineIndex, _ in
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let label = vm.sectionLabel(forLineIndex: lineIndex) {
-                            SectionLabelView(label: label, onDelete: {})
-                                .padding(.bottom, 4)
-                        }
-                        let lineChords = vm.chords(forLineIndex: lineIndex)
-                        ZStack(alignment: .topLeading) {
-                            FlowLayout(spacing: 0) {
-                                ForEach(Array(vm.wordsInLine(lineIndex).enumerated()), id: \.offset) { wordIndex, word in
-                                    HStack(spacing: 0) {
-                                        Text(word)
-                                            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-                                            .foregroundStyle(.white)
-                                            .background(GeometryReader { geo in
-                                                Color.clear.preference(
-                                                    key: WordFramePreferenceKey.self,
-                                                    value: ["\(lineIndex):\(wordIndex)": geo.frame(in: .named("sharedCoord"))]
-                                                )
-                                            })
-                                        Text(" ")
-                                            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                            }
-                            .padding(.top, lineChords.isEmpty ? 0 : 22)
-
-                            ForEach(lineChords) { chord in
-                                let key = "\(lineIndex):\(chord.wordIndex)"
-                                if let frame = wordFrames[key] {
-                                    chordCapsule(for: chord)
-                                        .offset(x: frame.minX - 14, y: 0)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 10)
-            .coordinateSpace(name: "sharedCoord")
-            .onPreferenceChange(WordFramePreferenceKey.self) { wordFrames = $0 }
-        }
-    }
-
-    @ViewBuilder
-    private func chordCapsule(for chord: Chord) -> some View {
-        HStack(spacing: 2) {
-            ForEach(Array(chord.names.enumerated()), id: \.offset) { nameIndex, name in
-                if nameIndex > 0 {
-                    Text("/")
-                        .font(.system(size: fontSize - 4, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                Text(name)
-                    .font(.system(size: fontSize - 3, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5).padding(.vertical, 2)
-                    .background(
-                        Capsule().stroke(.white.opacity(0.5), lineWidth: 1)
-                            .background(Capsule().fill(Color.white.opacity(0.07)))
-                    )
-                    .fixedSize()
             }
         }
     }
