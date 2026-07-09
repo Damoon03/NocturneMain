@@ -75,7 +75,7 @@ struct FragmentsListView: View {
         .sheet(item: $showingAttachSheet) { fragment in
             AttachFragmentSheet(
                 fragment: fragment,
-                songs: libraryVM.songs,
+                songs: libraryVM.songs.filter { !$0.isDeleted },
                 onAttach: { songID in
                     fragmentsVM.attach(fragment, toSongID: songID)
                     showingAttachSheet = nil
@@ -91,22 +91,17 @@ struct FragmentsListView: View {
                 editingFragment = nil
             }
         }
-        .sheet(isPresented: Binding(
-            get: { deletingFragment != nil },
-            set: { if !$0 { deletingFragment = nil } }
-        )) {
-            if let fragment = deletingFragment {
-                DeleteConfirmSheet(
-                    title: fragment.text.isEmpty ? fragment.type.rawValue : String(fragment.text.prefix(40)),
-                    heading: "Delete Fragment",
-                    subtitle: "\"\(fragment.text.isEmpty ? fragment.type.rawValue : String(fragment.text.prefix(40)))\" will be moved to Recently Deleted.",
-                    onDelete: {
-                        fragmentsVM.delete(fragment)
-                        deletingFragment = nil
-                    },
-                    onCancel: { deletingFragment = nil }
-                )
-            }
+        .sheet(item: $deletingFragment) { fragment in
+            DeleteConfirmSheet(
+                title: fragment.text.isEmpty ? fragment.type.rawValue : String(fragment.text.prefix(40)),
+                heading: "Delete Fragment",
+                subtitle: "\"\(fragment.text.isEmpty ? fragment.type.rawValue : String(fragment.text.prefix(40)))\" will be moved to Recently Deleted.",
+                onDelete: {
+                    fragmentsVM.delete(fragment)
+                    deletingFragment = nil
+                },
+                onCancel: { deletingFragment = nil }
+            )
         }
     }
 
