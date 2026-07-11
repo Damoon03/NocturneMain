@@ -13,8 +13,9 @@ struct LibraryView: View {
     @State private var selectedTab: LibraryTab = .songs
     @State private var showingCaptureSheet = false
     @State private var searchText = ""
-    @State private var shareItems: [Any]? = nil
+    @State private var sharePayload: SharePayload? = nil
     @State private var songToDelete: Song? = nil
+    @State private var pendingSongNavigationID: UUID? = nil
     @State private var showingProfile = false
     @State private var showingCreateFolder = false
     @State private var movingSong: Song? = nil
@@ -50,23 +51,30 @@ struct LibraryView: View {
                 fabButton
             }
             .navigationDestination(for: UUID.self) { songID in
-                if let song = libraryViewModel.songs.first(where: { $0.id == songID }) {
+                if let song = libraryViewModel.songs.first(where: { $0.id == songID && !$0.isDeleted }) {
                     ContentView(
                         song: song,
                         fragmentsVM: fragmentsViewModel,
                         settings: settings,
                         onSave: { updatedSong in
-                            libraryViewModel.update(updatedSong)
-                            settings.trackWordCount(for: updatedSong)
+                            let ok = await libraryViewModel.update(updatedSong)
+                            if ok { settings.trackWordCount(for: updatedSong) }
+                            return ok
                         },
                         onDismiss: { updatedSong in
-                            libraryViewModel.update(updatedSong)
-                            settings.trackWordCount(for: updatedSong)
+                            let ok = await libraryViewModel.update(updatedSong)
+                            if ok { settings.trackWordCount(for: updatedSong) }
                             if !path.isEmpty { path.removeLast() }
                         }
                     )
                     .navigationBarBackButtonHidden(true)
                     .toolbar(.hidden, for: .navigationBar)
+                } else {
+                    ContentUnavailableView("Song unavailable", systemImage: "music.note")
+                        .foregroundStyle(.white.opacity(0.5))
+                        .onAppear {
+                            if !path.isEmpty { path.removeLast() }
+                        }
                 }
             }
         }
@@ -85,11 +93,16 @@ struct LibraryView: View {
         .sheet(isPresented: $showingCreateFolder) {
             CreateFolderSheet(isPresented: $showingCreateFolder) { name in _ = libraryViewModel.createFolder(name: name) }
         }
-        .sheet(item: $showingFolderDetail) { folder in
+        .sheet(item: $showingFolderDetail, onDismiss: {
+            if let songID = pendingSongNavigationID {
+                pendingSongNavigationID = nil
+                path.append(songID)
+            }
+        }) { folder in
             NavigationStack {
                 FolderDetailView(libraryVM: libraryViewModel, fragmentsVM: fragmentsViewModel, folder: folder) { songID in
+                    pendingSongNavigationID = songID
                     showingFolderDetail = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { path.append(songID) }
                 }
             }
         }
@@ -105,8 +118,8 @@ struct LibraryView: View {
             ProfileView(settings: settings, libraryVM: libraryViewModel, fragmentsVM: fragmentsViewModel, onDismiss: { showingProfile = false })
                 .presentationBackground(Color.black)
         }
-        .sheet(isPresented: Binding(get: { shareItems != nil }, set: { if !$0 { shareItems = nil } })) {
-            if let items = shareItems { ShareSheet(items: items) }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(items: payload.items)
         }
         .sheet(item: $songToDelete) { song in
             DeleteConfirmSheet(
@@ -130,13 +143,13 @@ struct LibraryView: View {
             .padding(.bottom, 20)
 
             HStack {
-                Button(action: { showingRecentlyDeleted = true }) {
-                    Image(systemName: "trash").font(.system(size: 16, weight: .light)).foregroundStyle(.white.opacity(0.5))
-                }
+                Button("Recently deleted", systemImage: "trash") { showingRecentlyDeleted = true }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.white.opacity(0.5))
                 Spacer()
-                Button(action: { showingProfile = true }) {
-                    Image(systemName: "person.circle").font(.system(size: 18, weight: .light)).foregroundStyle(.white.opacity(0.4))
-                }
+                Button("Profile", systemImage: "person.circle") { showingProfile = true }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.white.opacity(0.4))
             }
             .padding(.horizontal, 28)
         }
@@ -147,7 +160,7 @@ struct LibraryView: View {
     // MARK: - Tab switcher
     private var tabSwitcher: some View {
         HStack(spacing: 8) {
-            tabButton(.songs, label: "Songs", count: libraryViewModel.songs.filter { !$0.isDeleted }.count)
+            tabButton(.songs, label: "Songs", count: libraryViewModel.activeSongCount)
             tabButton(.fragments, label: "Fragments", count: fragmentsViewModel.activeCount)
             Spacer()
         }
@@ -157,7 +170,7 @@ struct LibraryView: View {
     // MARK: - Search bar
     @ViewBuilder
     private var searchBarView: some View {
-        if selectedTab == .songs && !libraryViewModel.songs.filter({ !$0.isDeleted }).isEmpty {
+        if selectedTab == .songs && libraryViewModel.activeSongCount > 0 {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .regular)).foregroundStyle(.white.opacity(0.3))
                 TextField("Search songs, lyrics, chords", text: $searchText)
@@ -183,12 +196,12 @@ struct LibraryView: View {
 
     // MARK: - FAB
     private var fabButton: some View {
-        Button(action: { showingFABMenu = true }) {
-            Image(systemName: "lightbulb").font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.black).frame(width: 52, height: 52)
-                .background(Circle().fill(.white))
-                .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
-        }
+        Button("New fragment", systemImage: "lightbulb") { showingFABMenu = true }
+            .labelStyle(.iconOnly)
+            .foregroundStyle(.black)
+            .frame(width: 52, height: 52)
+            .background(Circle().fill(.white))
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
         .padding(.trailing, 24).padding(.bottom, 28)
     }
 
@@ -271,7 +284,7 @@ struct LibraryView: View {
                 Button { movingSong = song } label: { Label("Move to Folder", systemImage: "folder") }
                 Button { shareSong(song) } label: { Label("Share PDF", systemImage: "square.and.arrow.up") }
                 if let items = SongShareOptions.linkItems(for: song) {
-                    Button { shareItems = items } label: { Label("Share Link", systemImage: "link") }
+                    Button { sharePayload = SharePayload(items: items) } label: { Label("Share Link", systemImage: "link") }
                 }
                 Divider()
                 Button(role: .destructive) { songToDelete = song } label: {
@@ -334,10 +347,13 @@ struct LibraryView: View {
     }
 
     private func shareSong(_ song: Song) {
-        let data = SongExporter.pdf(for: song)
-        let fileName = sanitize(song.title) + ".pdf"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        if (try? data.write(to: url)) != nil { shareItems = [url] }
+        Task {
+            let data = SongExporter.pdf(for: song)
+            let fileName = sanitize(song.title) + ".pdf"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            guard (try? data.write(to: url)) != nil else { return }
+            await MainActor.run { sharePayload = SharePayload(items: [url]) }
+        }
     }
 
     private func sanitize(_ title: String) -> String {
@@ -345,51 +361,5 @@ struct LibraryView: View {
         let name = t.isEmpty ? "Untitled" : t
         let invalid = CharacterSet(charactersIn: "/\\?%*|\"<>:")
         return name.components(separatedBy: invalid).joined(separator: "-")
-    }
-}
-
-// MARK: - Song context preview card
-struct SongContextPreview: View {
-    let song: Song
-
-    private var previewLines: [String] {
-        song.lyrics.components(separatedBy: "\n")
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .prefix(8).map { $0 }
-    }
-
-    var body: some View {
-        ZStack {
-            Color.black
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(Color.white.opacity(0.07)).frame(width: 32, height: 32)
-                        Image(systemName: "music.note").font(.system(size: 12, weight: .light)).foregroundStyle(.white.opacity(0.4))
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(song.title.isEmpty ? "Untitled" : song.title)
-                            .font(.system(size: 14, weight: .medium)).foregroundStyle(.white.opacity(0.9))
-                        Text("\(song.lyrics.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count) words")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced)).foregroundStyle(.white.opacity(0.25))
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
-                Divider().background(Color.white.opacity(0.07))
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(previewLines.enumerated()), id: \.offset) { idx, line in
-                        Text(line)
-                            .font(.system(size: 13, weight: .regular, design: .monospaced))
-                            .foregroundStyle(.white.opacity(idx == 0 ? 0.75 : max(0.1, 0.35 - Double(idx) * 0.03)))
-                            .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 18).padding(.vertical, 14)
-            }
-        }
-        .frame(width: 300)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 0.5))
     }
 }
