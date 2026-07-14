@@ -13,7 +13,7 @@ import SwiftUI
 // MARK: - Feature card model
 
 private struct Feature: Identifiable {
-    let id = UUID()
+    let id: String
     let icon: String
     let title: String
     let description: String
@@ -22,30 +22,35 @@ private struct Feature: Identifiable {
 
 private let features: [Feature] = [
     Feature(
+        id: "write",
         icon: "music.note",
         title: "Write freely",
         description: "A distraction-free canvas for lyrics, with chords placed exactly above the words they belong to.",
         color: Color(red: 0.4, green: 0.6, blue: 1.0)
     ),
     Feature(
+        id: "fragments",
         icon: "lightbulb",
         title: "Capture fragments",
         description: "Catch a lyric line, riff, title idea, or mood the moment it surfaces — before it disappears.",
         color: Color(red: 1.0, green: 0.85, blue: 0.4)
     ),
     Feature(
+        id: "record",
         icon: "waveform",
         title: "Record as you write",
         description: "Lay down voice memos and melodies right inside the song. Star your best takes as the main recording.",
         color: Color(red: 0.6, green: 1.0, blue: 0.7)
     ),
     Feature(
+        id: "organise",
         icon: "folder",
         title: "Stay organised",
         description: "Group songs into folders — finished work, demos, experiments — and find anything instantly by chord or lyric.",
         color: Color(red: 0.8, green: 0.5, blue: 1.0)
     ),
     Feature(
+        id: "share",
         icon: "link",
         title: "Share your work",
         description: "Export a chord-chart PDF or send a Nocturne link so collaborators can read the song in the app.",
@@ -58,6 +63,7 @@ private let features: [Feature] = [
 struct WelcomeView: View {
     var onDismiss: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentPage = 0
     @State private var headerOpacity: Double = 0
     @State private var cardOpacity: Double = 0
@@ -91,7 +97,7 @@ struct WelcomeView: View {
 
                 // ── Feature cards (paged) ─────────────────────────────
                 TabView(selection: $currentPage) {
-                    ForEach(Array(features.enumerated()), id: \.offset) { index, feature in
+                    ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
                         featureCard(feature)
                             .tag(index)
                     }
@@ -109,7 +115,7 @@ struct WelcomeView: View {
                                   ? features[currentPage].color
                                   : Color.white.opacity(0.15))
                             .frame(width: i == currentPage ? 18 : 5, height: 5)
-                            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: currentPage)
+                            .motionAwareAnimation(.spring(response: 0.35, dampingFraction: 0.7), value: currentPage)
                     }
                 }
                 .padding(.top, 24)
@@ -161,12 +167,16 @@ struct WelcomeView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeOut(duration: 0.6)) {
+            if reduceMotion {
                 headerOpacity = 1
-            }
-            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
                 cardOpacity = 1
                 cardOffset = 0
+            } else {
+                withAnimation(.easeOut(duration: 0.6)) { headerOpacity = 1 }
+                withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+                    cardOpacity = 1
+                    cardOffset = 0
+                }
             }
         }
     }
