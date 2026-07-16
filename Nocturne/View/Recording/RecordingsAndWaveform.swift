@@ -19,7 +19,6 @@ struct WaveformView: View {
     var accentColor: Color = .white
 
     private let barCount = 40
-    @State private var isDragging = false
 
     var progress: Double {
         guard duration > 0 else { return 0 }
@@ -52,16 +51,16 @@ struct WaveformView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        isDragging = true
                         let pct = max(0, min(1, value.location.x / geo.size.width))
                         onSeek(pct * duration)
                     }
                     .onEnded { value in
-                        isDragging = false
                         let pct = max(0, min(1, value.location.x / geo.size.width))
                         onSeek(pct * duration)
                     }
             )
+            .accessibilityLabel("Playback position")
+            .accessibilityValue("\(Int(progress * 100)) percent")
         }
         .frame(height: 28)
     }
@@ -79,7 +78,7 @@ struct WaveformView: View {
 
 struct RecordingsSheetView: View {
     @ObservedObject var audioVM: AudioViewModel
-    let song: Song
+    @ObservedObject var viewModel: SongViewModel
     let onSaveRecording: (Recording) -> Void
     let onDeleteRecording: (Recording) -> Void
 
@@ -87,9 +86,9 @@ struct RecordingsSheetView: View {
     @State private var playingVideoNote: Recording? = nil
     @State private var recordingToDelete: Recording? = nil
 
-    private var audioRecordings: [Recording] { song.recordings.filter { $0.kind == .audio } }
-    private var videoNotes: [Recording] { song.recordings.filter { $0.kind == .video } }
-    private var isEmpty: Bool { song.recordings.isEmpty && !audioVM.isRecording }
+    private var audioRecordings: [Recording] { viewModel.song.recordings.filter { $0.kind == .audio } }
+    private var videoNotes: [Recording] { viewModel.song.recordings.filter { $0.kind == .video } }
+    private var isEmpty: Bool { viewModel.song.recordings.isEmpty && !audioVM.isRecording }
 
     var body: some View {
         ZStack {
@@ -107,37 +106,23 @@ struct RecordingsSheetView: View {
                     Spacer()
 
                     // Video note button
-                    Button(action: { showingVideoRecorder = true }) {
-                        HStack(spacing: 5) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.08))
-                                    .frame(width: 20, height: 20)
-                                Image(systemName: "video")
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                            Text("Video")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                    Button("Record", systemImage: "video") { showingVideoRecorder = true }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
                         .background(
                             Capsule()
                                 .fill(Color.white.opacity(0.06))
                                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                         )
-                    }
 
-                    // Audio record button
                     Button(action: {
                         if audioVM.isRecording {
-                            audioVM.stopRecording(for: song) { recording in
+                            audioVM.stopRecording(for: viewModel.song) { recording in
                                 onSaveRecording(recording)
                             }
                         } else {
-                            audioVM.startRecording(for: song)
+                            audioVM.startRecording(for: viewModel.song)
                         }
                     }) {
                         HStack(spacing: 6) {
@@ -257,12 +242,12 @@ struct RecordingsSheetView: View {
                 recordingDeleteOverlay(for: recording)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: recordingToDelete?.id)
+        .motionAwareAnimation(.easeInOut(duration: 0.2), value: recordingToDelete?.id)
         .presentationDetents([.fraction(0.55), .large])
         .presentationBackground(Color.black)
         .sheet(isPresented: $showingVideoRecorder) {
             VideoRecorderView(
-                songID: song.id,
+                songID: viewModel.song.id,
                 onSave: { recording in onSaveRecording(recording) },
                 isPresented: $showingVideoRecorder
             )
@@ -368,15 +353,13 @@ struct RecordingsSheetView: View {
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.3))
                 Spacer()
-                Button(action: {
+                Button(audioVM.isPlaying ? "Pause" : "Play", systemImage: audioVM.isPlaying ? "pause.fill" : "play.fill") {
                     audioVM.isPlaying ? audioVM.pausePlayback() : audioVM.resumePlayback()
-                }) {
-                    Image(systemName: audioVM.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
                 }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.white.opacity(0.1)))
                 Spacer()
                 Text(audioVM.formattedTime(audioVM.duration))
                     .font(.system(size: 10, design: .monospaced))
@@ -397,18 +380,13 @@ struct RecordingsSheetView: View {
         let isActive = audioVM.activeRecording?.id == recording.id
 
         return HStack(spacing: 14) {
-            Button(action: {
-                if isActive { audioVM.stopPlayback() } else { audioVM.play(recording) }
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(isActive ? Color.white.opacity(0.15) : Color.white.opacity(0.06))
-                        .frame(width: 36, height: 36)
-                    Image(systemName: isActive ? "stop.fill" : "play.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(isActive ? 0.9 : 0.5))
+                Button(isActive ? "Stop playback" : "Play recording", systemImage: isActive ? "stop.fill" : "play.fill") {
+                    if isActive { audioVM.stopPlayback() } else { audioVM.play(recording) }
                 }
-            }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.white.opacity(isActive ? 0.9 : 0.5))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(isActive ? Color.white.opacity(0.15) : Color.white.opacity(0.06)))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(formatDate(recording.createdAt))
@@ -421,11 +399,9 @@ struct RecordingsSheetView: View {
 
             Spacer()
 
-            Button(action: { recordingToDelete = recording }) {
-                Image(systemName: "trash")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.2))
-            }
+            Button("Delete recording", systemImage: "trash") { recordingToDelete = recording }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.white.opacity(0.2))
         }
         .padding(14)
         .background(
