@@ -2,161 +2,10 @@
 //  VideoRecordingView.swift
 //  Nocturne
 //
-//  Created by Damoon saber on 4/6/1405 AP.
-//
 
 import SwiftUI
 import AVFoundation
 import AVKit
-
-// ─────────────────────────────────────────────
-// MARK: - Camera preview (UIViewRepresentable)
-// ─────────────────────────────────────────────
-
-struct CameraPreviewView: UIViewRepresentable {
-    let session: AVCaptureSession
-
-    func makeUIView(context: Context) -> PreviewUIView {
-        let view = PreviewUIView()
-        view.session = session
-        return view
-    }
-
-    func updateUIView(_ uiView: PreviewUIView, context: Context) {}
-
-    class PreviewUIView: UIView {
-        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-
-        var previewLayer: AVCaptureVideoPreviewLayer {
-            layer as! AVCaptureVideoPreviewLayer
-        }
-
-        var session: AVCaptureSession? {
-            get { previewLayer.session }
-            set {
-                previewLayer.session = newValue
-                previewLayer.videoGravity = .resizeAspectFill
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - VideoRecorderViewModel
-// ─────────────────────────────────────────────
-import Combine
-
-@MainActor
-class VideoRecorderViewModel: NSObject, ObservableObject {
-    @Published var isRecording = false
-    @Published var recordingTime: TimeInterval = 0
-    @Published var permissionGranted = false
-    @Published var cameraReady = false
-
-    let session = AVCaptureSession()
-    private var movieOutput = AVCaptureMovieFileOutput()
-    private var timer: Timer?
-    private var outputURL: URL?
-    private var onFinish: ((URL, TimeInterval) -> Void)?
-
-    override init() {
-        super.init()
-        checkPermissions()
-    }
-
-    private func checkPermissions() {
-        let videoStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        let audioStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-
-        if videoStatus == .authorized && audioStatus == .authorized {
-            setupSession()
-        } else if videoStatus == .notDetermined || audioStatus == .notDetermined {
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                AVCaptureDevice.requestAccess(for: .audio) { _ in
-                    DispatchQueue.main.async { self?.setupSession() }
-                }
-            }
-        }
-    }
-
-    private func setupSession() {
-        session.beginConfiguration()
-        session.sessionPreset = .high
-
-        // Front camera
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
-              let videoInput = try? AVCaptureDeviceInput(device: camera),
-              session.canAddInput(videoInput) else { return }
-        session.addInput(videoInput)
-
-        // Microphone
-        if let mic = AVCaptureDevice.default(for: .audio),
-           let audioInput = try? AVCaptureDeviceInput(device: mic),
-           session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-        }
-
-        // Output
-        if session.canAddOutput(movieOutput) {
-            session.addOutput(movieOutput)
-            movieOutput.maxRecordedDuration = .invalid
-        }
-
-        session.commitConfiguration()
-
-        Task.detached { [weak self] in
-            self?.session.startRunning()
-            await MainActor.run { self?.cameraReady = true; self?.permissionGranted = true }
-        }
-    }
-
-    func startRecording(songID: UUID, completion: @escaping (URL, TimeInterval) -> Void) {
-        let fileName = "\(songID.uuidString)_\(Date().timeIntervalSince1970).mp4"
-        let url = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(fileName)
-        outputURL = url
-        onFinish = completion
-        movieOutput.startRecording(to: url, recordingDelegate: self)
-        isRecording = true
-        recordingTime = 0
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.recordingTime += 0.1
-            }
-        }
-    }
-
-    func stopRecording() {
-        guard isRecording else { return }
-        movieOutput.stopRecording()
-        timer?.invalidate()
-        timer = nil
-        isRecording = false
-    }
-
-    func stopSession() {
-        Task.detached { [weak self] in self?.session.stopRunning() }
-    }
-}
-
-extension VideoRecorderViewModel: AVCaptureFileOutputRecordingDelegate {
-    nonisolated func fileOutput(_ output: AVCaptureFileOutput,
-                    didFinishRecordingTo outputFileURL: URL,
-                    from connections: [AVCaptureConnection],
-                    error: Error?) {
-        guard error == nil else { return }
-        let duration = output.recordedDuration.seconds
-        Task { @MainActor [weak self] in
-            self?.onFinish?(outputFileURL, duration)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - VideoRecorderView (the sheet)
-// ─────────────────────────────────────────────
 
 struct VideoRecorderView: View {
     let songID: UUID
@@ -172,11 +21,9 @@ struct VideoRecorderView: View {
             VStack(spacing: 0) {
                 // Title
                 HStack {
-                    Button(action: { isPresented = false }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
+                    Button("Close", systemImage: "xmark") { isPresented = false }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.white.opacity(0.4))
                     Spacer()
                     Text("Video Note")
                         .font(.system(size: 14, weight: .regular))
@@ -292,78 +139,6 @@ struct VideoRecorderView: View {
     }
 }
 
-// ─────────────────────────────────────────────
-// MARK: - Circular video player
-// ─────────────────────────────────────────────
-
-struct CircularVideoPlayer: UIViewRepresentable {
-    let url: URL
-    @Binding var isPlaying: Bool
-
-    func makeUIView(context: Context) -> PlayerUIView {
-        let view = PlayerUIView(url: url)
-        return view
-    }
-
-    func updateUIView(_ uiView: PlayerUIView, context: Context) {
-        if isPlaying {
-            uiView.player?.play()
-        } else {
-            uiView.player?.pause()
-        }
-    }
-
-    class PlayerUIView: UIView {
-        var player: AVPlayer?
-        private var playerLayer: AVPlayerLayer?
-        private var loopObserver: NSObjectProtocol?
-
-        init(url: URL) {
-            super.init(frame: .zero)
-            backgroundColor = .clear
-            setup(url: url)
-        }
-
-        required init?(coder: NSCoder) { fatalError() }
-
-        private func setup(url: URL) {
-            let item = AVPlayerItem(url: url)
-            let p = AVPlayer(playerItem: item)
-            p.isMuted = false
-            player = p
-
-            let layer = AVPlayerLayer(player: p)
-            layer.videoGravity = .resizeAspectFill
-            self.layer.addSublayer(layer)
-            playerLayer = layer
-
-            // Loop
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak p] _ in
-                p?.seek(to: .zero)
-                p?.play()
-            }
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            playerLayer?.frame = bounds
-        }
-
-        deinit {
-            if let obs = loopObserver { NotificationCenter.default.removeObserver(obs) }
-            player?.pause()
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - VideoNoteSheet (full-screen player)
-// ─────────────────────────────────────────────
-
 struct VideoNoteSheet: View {
     let recording: Recording
     let onDelete: () -> Void
@@ -377,24 +152,20 @@ struct VideoNoteSheet: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Button(action: { isPresented = false }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
+                    Button("Close", systemImage: "xmark") { isPresented = false }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.white.opacity(0.4))
                     Spacer()
                     Text(formatDate(recording.createdAt))
                         .font(.system(size: 12, weight: .light, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.3))
                     Spacer()
-                    Button(action: {
+                    Button("Delete video note", systemImage: "trash") {
                         isPresented = false
                         onDelete()
-                    }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(.red.opacity(0.5))
                     }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.red.opacity(0.5))
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 24)

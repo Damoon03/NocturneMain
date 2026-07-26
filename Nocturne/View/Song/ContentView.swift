@@ -18,14 +18,13 @@ struct ContentView: View {
     @State private var showingFragments = false
     @State private var lyricsOpacity: Double = 0
     @State private var wordFrames: [String: CGRect] = [:]
-    @State private var chordWidths: [UUID: CGFloat] = [:]
 
-    @State private var editingNoteLineIndex: Int? = nil
+    @State private var editingNote: NoteEditContext? = nil
     @State private var noteText: String = ""
-    @State private var shareItems: [Any]? = nil
+    @State private var sharePayload: SharePayload? = nil
 
-    var onSave: ((Song) -> Void)?
-    var onDismiss: ((Song) -> Void)?
+    var onSave: ((Song) async -> Bool)?
+    var onDismiss: ((Song) async -> Void)?
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -36,8 +35,8 @@ struct ContentView: View {
         song: Song,
         fragmentsVM: FragmentsViewModel,
         settings: SettingsStore,
-        onSave: ((Song) -> Void)? = nil,
-        onDismiss: ((Song) -> Void)? = nil
+        onSave: ((Song) async -> Bool)? = nil,
+        onDismiss: ((Song) async -> Void)? = nil
     ) {
         _viewModel = StateObject(wrappedValue: SongViewModel(song: song, onUpdate: onSave))
         self.fragmentsVM = fragmentsVM
@@ -65,7 +64,7 @@ struct ContentView: View {
                 HStack(spacing: 16) {
                     Button(action: {
                         HapticManager.impact(.light)
-                        onDismiss?(viewModel.song)
+                        Task { await onDismiss?(viewModel.song) }
                     }) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 18, weight: .light))
@@ -74,21 +73,17 @@ struct ContentView: View {
                     .accessibilityLabel("Back to library")
                     Spacer()
                     saveStatusLabel
-                    Button(action: {
+                    Button("Share song link", systemImage: "link") {
                         HapticManager.impact(.light)
                         if let items = SongShareOptions.linkItems(for: viewModel.song) {
-                            shareItems = items
+                            sharePayload = SharePayload(items: items)
                         }
-                    }) {
-                        Image(systemName: "link")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
                     }
-                    Button(action: { showingFragments = true }) {
-                        Image(systemName: "lightbulb")
-                            .font(.system(size: 15, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.white.opacity(0.4))
+                    Button("Song fragments", systemImage: "lightbulb") { showingFragments = true }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.white.opacity(0.4))
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 20)
@@ -123,6 +118,7 @@ struct ContentView: View {
                                     lineWidth: 0.5))
                         )
                     }
+                    .accessibilityLabel(audioVM.isRecording ? "Stop recording" : "Open recordings")
 
                     Spacer()
 
@@ -159,7 +155,6 @@ struct ContentView: View {
                     }
                 }
                 .padding(.horizontal, 28).padding(.bottom, 10)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.hasChords)
 
                 // Picking word prompt
                 if viewModel.isPickingWord {
@@ -192,7 +187,7 @@ struct ContentView: View {
                     }
                     .padding(.bottom, 8)
                     .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: isFocused)
+                    .motionAwareAnimation(.easeInOut(duration: 0.2), value: isFocused)
                 }
 
                 // MARK: - Main text area
@@ -201,44 +196,45 @@ struct ContentView: View {
                         .fill(Color.white.opacity(0.04))
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.07), lineWidth: 0.5))
 
-                    if viewModel.isPickingWord {
-                        wordPickerView.transition(.opacity)
-                    } else {
-                        ZStack {
-                            LyricsTextView(
-                                text: $viewModel.song.lyrics,
-                                fontSize: fontSize,
-                                lineSpacing: lineSpacing,
-                                isFocused: $isFocused
-                            )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .opacity(isFocused ? 1 : 0)
-                            .onChange(of: isFocused) { _, newValue in
-                                if !newValue { viewModel.runAutoSectionDetection() }
-                            }
+                    Group {
+                        if viewModel.isPickingWord {
+                            wordPickerView
+                        } else {
+                            ZStack {
+                                LyricsTextView(
+                                    text: $viewModel.song.lyrics,
+                                    fontSize: fontSize,
+                                    lineSpacing: lineSpacing,
+                                    isFocused: $isFocused
+                                )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .opacity(isFocused ? 1 : 0)
+                                .onChange(of: isFocused) { _, newValue in
+                                    if !newValue { viewModel.runAutoSectionDetection() }
+                                }
 
-                            if !isFocused {
-                                lyricsDisplayView
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { isFocused = true }
-                                    .transition(.identity)
-                                    .opacity(lyricsOpacity)
+                                if !isFocused {
+                                    lyricsDisplayView
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { isFocused = true }
+                                        .transition(.identity)
+                                        .opacity(lyricsOpacity)
+                                }
                             }
+                            .animation(nil, value: isFocused)
                         }
-                        .animation(nil, value: isFocused)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 16)
-
-                Spacer().frame(height: 0)
+                .padding(.bottom, 8)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { editingNoteLineIndex != nil },
-            set: { if !$0 { editingNoteLineIndex = nil } }
-        )) {
-            noteEditorSheet
+        .sheet(item: $editingNote) { context in
+            noteEditorSheet(lineIndex: context.lineIndex)
         }
         .sheet(isPresented: $viewModel.isAnnotating) {
             ChordSheetView(viewModel: viewModel)
@@ -246,7 +242,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingRecordings) {
             RecordingsSheetView(
                 audioVM: audioVM,
-                song: viewModel.song,
+                viewModel: viewModel,
                 onSaveRecording: { recording in
                     viewModel.song.recordings.append(recording)
                     HapticManager.success()
@@ -259,18 +255,19 @@ struct ContentView: View {
         .sheet(isPresented: $showingFragments) {
             SongFragmentsSheet(fragmentsVM: fragmentsVM, songID: viewModel.song.id)
         }
-        .sheet(isPresented: Binding(
-            get: { shareItems != nil },
-            set: { if !$0 { shareItems = nil } }
-        )) {
-            if let items = shareItems { ShareSheet(items: items) }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(items: payload.items)
         }
         .onAppear {
-            withAnimation(.easeIn(duration: 0.9)) { lyricsOpacity = 1 }
+            if UIAccessibility.isReduceMotionEnabled {
+                lyricsOpacity = 1
+            } else {
+                withAnimation(.easeIn(duration: 0.9)) { lyricsOpacity = 1 }
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background || phase == .inactive {
-                onSave?(viewModel.song)
+                Task { _ = await onSave?(viewModel.song) }
             }
         }
     }
@@ -292,23 +289,21 @@ struct ContentView: View {
     }
 
     // MARK: - Note editor sheet
-    private var noteEditorSheet: some View {
+    private func noteEditorSheet(lineIndex: Int) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 20) {
                 HStack {
-                    Button("Cancel") { editingNoteLineIndex = nil }
+                    Button("Cancel") { editingNote = nil }
                         .foregroundStyle(.white.opacity(0.4)).font(.system(size: 14))
                     Spacer()
                     Text("Line Note")
                         .foregroundStyle(.white).font(.system(size: 15, weight: .medium))
                     Spacer()
                     Button("Save") {
-                        if let lineIndex = editingNoteLineIndex {
-                            viewModel.addNote(noteText, atLineIndex: lineIndex)
-                            HapticManager.success()
-                        }
-                        editingNoteLineIndex = nil
+                        viewModel.addNote(noteText, atLineIndex: lineIndex)
+                        HapticManager.success()
+                        editingNote = nil
                     }
                     .foregroundStyle(.white.opacity(0.85)).font(.system(size: 14, weight: .medium))
                 }
@@ -325,10 +320,10 @@ struct ContentView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.2), lineWidth: 0.5))
                     .padding(.horizontal, 20)
 
-                if let idx = editingNoteLineIndex, viewModel.note(forLineIndex: idx) != nil {
+                if viewModel.note(forLineIndex: lineIndex) != nil {
                     Button(role: .destructive) {
-                        viewModel.removeNote(atLineIndex: idx)
-                        editingNoteLineIndex = nil
+                        viewModel.removeNote(atLineIndex: lineIndex)
+                        editingNote = nil
                     } label: {
                         Label("Remove note", systemImage: "trash")
                             .font(.system(size: 13)).foregroundStyle(.red.opacity(0.6))
@@ -343,115 +338,18 @@ struct ContentView: View {
 
     // MARK: - Lyrics display (read mode)
     private var lyricsDisplayView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: lineSpacing) {
-                ForEach(Array(viewModel.lyricsLines.enumerated()), id: \.offset) { lineIndex, _ in
-                    VStack(alignment: .leading, spacing: 2) {
-
-                        if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
-                            SectionLabelView(label: label) { viewModel.removeSection(atLineIndex: lineIndex) }
-                                .padding(.bottom, 4)
-                        }
-
-                        let lineChords = viewModel.chords(forLineIndex: lineIndex)
-
-                        ZStack(alignment: .topLeading) {
-                            FlowLayout(spacing: 0) {
-                                ForEach(Array(viewModel.wordsInLine(lineIndex).enumerated()), id: \.offset) { wordIndex, word in
-                                    HStack(spacing: 0) {
-                                        Text(word)
-                                            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-                                            .foregroundStyle(.white)
-                                            .background(GeometryReader { geo in
-                                                Color.clear.preference(
-                                                    key: WordFramePreferenceKey.self,
-                                                    value: ["\(lineIndex):\(wordIndex)": geo.frame(in: .named("lyricsCoordSpace"))]
-                                                )
-                                            })
-                                        Text(" ")
-                                            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                            }
-                            .padding(.top, lineChords.isEmpty ? 0 : 22)
-                            .contextMenu {
-                                ForEach(SectionType.allCases, id: \.self) { type in
-                                    Button(action: {
-                                        viewModel.addSection(type, atLineIndex: lineIndex)
-                                        HapticManager.impact(.light)
-                                    }) {
-                                        Label(type.rawValue, systemImage: "tag")
-                                    }
-                                }
-                                if viewModel.sectionLabel(forLineIndex: lineIndex) != nil {
-                                    Divider()
-                                    Button(role: .destructive) {
-                                        viewModel.removeSection(atLineIndex: lineIndex)
-                                    } label: {
-                                        Label("Remove label", systemImage: "trash")
-                                    }
-                                }
-                                Divider()
-                                Button(action: {
-                                    noteText = viewModel.note(forLineIndex: lineIndex)?.text ?? ""
-                                    editingNoteLineIndex = lineIndex
-                                }) {
-                                    Label(
-                                        viewModel.note(forLineIndex: lineIndex) != nil ? "Edit note" : "Add note",
-                                        systemImage: "note.text"
-                                    )
-                                }
-                            }
-
-                            ForEach(lineChords) { chord in
-                                let key = "\(lineIndex):\(chord.wordIndex)"
-                                if let frame = wordFrames[key] {
-                                    chordCapsuleGroup(for: chord, lineIndex: lineIndex)
-                                        .background(GeometryReader { geo in
-                                            Color.clear.onAppear { chordWidths[chord.id] = geo.size.width }
-                                        })
-                                        .offset(x: frame.minX - 14, y: 0)
-                                }
-                            }
-                        }
-
-                        // MARK: - Note row (long press → context menu)
-                        if let note = viewModel.note(forLineIndex: lineIndex) {
-                            HStack(spacing: 6) {
-                                Rectangle()
-                                    .fill(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.4))
-                                    .frame(width: 2)
-                                Text(note.text)
-                                    .font(.system(size: fontSize - 1).italic())
-                                    .foregroundStyle(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.75))
-                                    .multilineTextAlignment(.leading)
-                                    .lineLimit(2)
-                            }
-                            .padding(.top, 3)
-                            .contextMenu {
-                                Button(action: {
-                                    noteText = note.text
-                                    editingNoteLineIndex = lineIndex
-                                }) {
-                                    Label("Edit note", systemImage: "pencil")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    viewModel.removeNote(atLineIndex: lineIndex)
-                                    HapticManager.impact(.medium)
-                                } label: {
-                                    Label("Delete note", systemImage: "trash")
-                                }
-                            }
-                        }
-                    }
-                }
+        LyricsWithChordsView(
+            viewModel: viewModel,
+            fontSize: fontSize,
+            lineSpacing: lineSpacing,
+            coordinateSpaceName: "lyricsCoordSpace",
+            wordFrames: $wordFrames,
+            isInteractive: true,
+            onEditNote: { lineIndex in
+                noteText = viewModel.note(forLineIndex: lineIndex)?.text ?? ""
+                editingNote = NoteEditContext(lineIndex: lineIndex)
             }
-            .padding(.horizontal, 15).padding(.vertical, 10)
-            .coordinateSpace(name: "lyricsCoordSpace")
-            .onPreferenceChange(WordFramePreferenceKey.self) { wordFrames = $0 }
-        }
+        )
     }
 
     @ViewBuilder
@@ -486,7 +384,8 @@ struct ContentView: View {
     private var wordPickerView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: lineSpacing) {
-                ForEach(Array(viewModel.lyricsLines.enumerated()), id: \.offset) { lineIndex, _ in
+                ForEach(viewModel.lyricLineItems) { lineItem in
+                    let lineIndex = lineItem.index
                     VStack(alignment: .leading, spacing: 2) {
                         if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
                             SectionLabelView(label: label) { viewModel.removeSection(atLineIndex: lineIndex) }
@@ -500,13 +399,13 @@ struct ContentView: View {
                             .padding(.bottom, 2)
                         }
                         FlowLayout(spacing: 0) {
-                            ForEach(Array(viewModel.wordsInLine(lineIndex).enumerated()), id: \.offset) { wordIndex, word in
-                                let globalIndex = globalWordIndex(lineIndex: lineIndex, wordIndex: wordIndex)
+                            ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
+                                let globalIndex = globalWordIndex(lineIndex: lineIndex, wordIndex: wordItem.index)
                                 Button(action: {
                                     viewModel.insertAnnotation(beforeWordAtIndex: globalIndex)
                                     HapticManager.impact(.medium)
                                 }) {
-                                    Text(word + " ")
+                                    Text(wordItem.word + " ")
                                         .font(.system(size: fontSize, weight: .regular, design: .monospaced))
                                         .foregroundStyle(.white)
                                         .underline(color: .white.opacity(0.25))
@@ -520,22 +419,15 @@ struct ContentView: View {
                     }
                 }
             }
-            .padding(.horizontal, 15).padding(.vertical, 10)
+            .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func globalWordIndex(lineIndex: Int, wordIndex: Int) -> Int {
         var count = 0
         for i in 0..<lineIndex { count += viewModel.wordsInLine(i).count }
         return count + wordIndex
-    }
-}
-
-// MARK: - Word frame measurement
-struct WordFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 
