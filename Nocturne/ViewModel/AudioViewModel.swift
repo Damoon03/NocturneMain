@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import Combine
 
+@MainActor
 class AudioViewModel: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var isPlaying = false
@@ -81,7 +82,9 @@ class AudioViewModel: NSObject, ObservableObject {
             recordingTime = 0
 
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.recordingTime = self?.audioRecorder?.currentTime ?? 0
+                Task { @MainActor in
+                    self?.recordingTime = self?.audioRecorder?.currentTime ?? 0
+                }
             }
         } catch {
             print("Recording failed: \(error)")
@@ -125,8 +128,10 @@ class AudioViewModel: NSObject, ObservableObject {
             duration = audioPlayer?.duration ?? 0
             isPlaying = true
 
-            timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                self?.currentTime = self?.audioPlayer?.currentTime ?? 0
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    self?.currentTime = self?.audioPlayer?.currentTime ?? 0
+                }
             }
         } catch {
             print("Playback failed: \(error)")
@@ -152,8 +157,10 @@ class AudioViewModel: NSObject, ObservableObject {
     func resumePlayback() {
         audioPlayer?.play()
         isPlaying = true
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            self?.currentTime = self?.audioPlayer?.currentTime ?? 0
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.currentTime = self?.audioPlayer?.currentTime ?? 0
+            }
         }
     }
 
@@ -184,8 +191,8 @@ extension AudioViewModel: AVAudioRecorderDelegate {
 }
 
 extension AudioViewModel: AVAudioPlayerDelegate {
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        DispatchQueue.main.async {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
             self.isPlaying = false
             self.currentTime = 0
             self.activeRecording = nil

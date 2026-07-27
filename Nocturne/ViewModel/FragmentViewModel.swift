@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class FragmentsViewModel: ObservableObject {
     @Published var fragments: [Fragment] = []
     @Published var filterType: FragmentType? = nil
@@ -137,11 +138,17 @@ class FragmentsViewModel: ObservableObject {
 
     // MARK: - Persistence
     private func save() {
-        do {
-            try DataPersistence.save(fragments, to: fragmentsFile)
-            lastSaveError = nil
-        } catch {
-            lastSaveError = error.localizedDescription
+        let snapshot = fragments
+        let file = fragmentsFile
+        Task {
+            do {
+                try await Task.detached(priority: .utility) {
+                    try DataPersistence.save(snapshot, to: file)
+                }.value
+                lastSaveError = nil
+            } catch {
+                lastSaveError = error.localizedDescription
+            }
         }
     }
 
