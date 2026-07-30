@@ -2,13 +2,12 @@
 //  LibraryViewModel.swift
 //  Nocturne
 //
-//  Created by Damoon saber on 3/28/1405 AP.
-//
 
 import Foundation
 import Combine
 import SwiftUI
 
+@MainActor
 class LibraryViewModel: ObservableObject {
     @Published var songs: [Song] = []
     @Published var folders: [SongFolder] = []
@@ -19,13 +18,12 @@ class LibraryViewModel: ObservableObject {
     private let songsFile = "songs.json"
     private let foldersFile = "folders.json"
 
-    /// Songs visible in the main library (not deleted, not in any folder when
-    /// folderID == nil, or matching a specific folder).
+    var activeSongCount: Int { songs.filter { !$0.isDeleted }.count }
+
     func songs(inFolder folderID: UUID?) -> [Song] {
         songs.filter { !$0.isDeleted && $0.folderID == folderID }
     }
 
-    /// Recently-deleted songs, sorted most-recent first.
     var recentlyDeleted: [Song] {
         songs.filter { $0.isDeleted }.sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
     }
@@ -33,11 +31,13 @@ class LibraryViewModel: ObservableObject {
     init() {
         load()
         purgeExpiredDeletes()
-        if songs.filter({ !$0.isDeleted }).isEmpty {
-            let s = Song(title: "Untitled", lyrics: "")
-            songs.insert(s, at: 0)
-            save()
-        }
+        ensureDefaultSongIfNeeded()
+    }
+
+    private func ensureDefaultSongIfNeeded() {
+        guard songs.filter({ !$0.isDeleted }).isEmpty else { return }
+        songs.insert(Song(title: "Untitled", lyrics: ""), at: 0)
+        Task { _ = await saveSongs() }
     }
 
     // MARK: - CRUD
@@ -46,55 +46,49 @@ class LibraryViewModel: ObservableObject {
         var song = Song(title: "Untitled", lyrics: "")
         song.folderID = folderID
         songs.insert(song, at: 0)
-        save()
+        Task { _ = await saveSongs() }
         return song
     }
 
-    func update(_ song: Song) {
-        if let index = songs.firstIndex(where: { $0.id == song.id }) {
-            songs[index] = song
-            save()
-        }
+    @discardableResult
+    func update(_ song: Song) async -> Bool {
+        guard let index = songs.firstIndex(where: { $0.id == song.id }) else { return false }
+        songs[index] = song
+        return await saveSongs()
     }
 
-    /// Soft-delete: mark with deletedAt; purged after 30 days.
     func softDelete(_ song: Song) {
         if let index = songs.firstIndex(where: { $0.id == song.id }) {
             songs[index].deletedAt = Date()
-            save()
+            Task { _ = await saveSongs() }
         }
     }
 
-    /// Permanently removes a song and its audio files.
     func permanentlyDelete(_ song: Song) {
         for rec in song.recordings {
             try? FileManager.default.removeItem(at: rec.fileURL)
         }
         songs.removeAll { $0.id == song.id }
-        save()
+        Task { _ = await saveSongs() }
     }
 
-    /// Restore from recently-deleted.
     func restore(_ song: Song) {
         if let index = songs.firstIndex(where: { $0.id == song.id }) {
             songs[index].deletedAt = nil
-            save()
+            Task { _ = await saveSongs() }
         }
     }
 
     func move(from source: IndexSet, to destination: Int, inFolder folderID: UUID?) {
-        // Reorder only within the visible subset, then apply order back to main array
         var subset = songs(inFolder: folderID)
         subset.move(fromOffsets: source, toOffset: destination)
-        // Rebuild full array: replace visible subset positions in order
         var subsetIter = subset.makeIterator()
         songs = songs.map { song in
             (!song.isDeleted && song.folderID == folderID) ? subsetIter.next() ?? song : song
         }
-        save()
+        Task { _ = await saveSongs() }
     }
 
-    // Legacy delete(at:) kept for compatibility — now routes to softDelete
     func delete(at offsets: IndexSet, inFolder folderID: UUID? = nil) {
         let subset = songs(inFolder: folderID)
         for index in offsets {
@@ -108,60 +102,72 @@ class LibraryViewModel: ObservableObject {
     func createFolder(name: String) -> SongFolder {
         let folder = SongFolder(name: name)
         folders.append(folder)
-        saveFolders()
+        Task { _ = await saveFolders() }
         return folder
     }
 
     func renameFolder(_ folder: SongFolder, to name: String) {
         if let index = folders.firstIndex(where: { $0.id == folder.id }) {
             folders[index].name = name
-            saveFolders()
+            Task { _ = await saveFolders() }
         }
     }
 
     func deleteFolder(_ folder: SongFolder) {
-        // Move songs in this folder back to root
-        for i in 0..<songs.count {
-            if songs[i].folderID == folder.id {
-                songs[i].folderID = nil
-            }
+        for i in 0..<songs.count where songs[i].folderID == folder.id {
+            songs[i].folderID = nil
         }
         folders.removeAll { $0.id == folder.id }
-        saveFolders()
-        save()
+        Task {
+            _ = await saveFolders()
+            _ = await saveSongs()
+        }
     }
 
     func moveSong(_ song: Song, toFolder folderID: UUID?) {
         if let index = songs.firstIndex(where: { $0.id == song.id }) {
             songs[index].folderID = folderID
-            save()
+            Task { _ = await saveSongs() }
         }
     }
 
     // MARK: - Private
 
-    /// Auto-purge songs deleted more than 30 days ago.
     private func purgeExpiredDeletes() {
         let cutoff = Date().addingTimeInterval(-30 * 24 * 3600)
         let toDelete = songs.filter { $0.isDeleted && ($0.deletedAt ?? .distantFuture) < cutoff }
         toDelete.forEach { permanentlyDelete($0) }
     }
 
-    private func save() {
+    @discardableResult
+    private func saveSongs() async -> Bool {
+        let snapshot = songs
+        let file = songsFile
         do {
-            try DataPersistence.save(songs, to: songsFile)
+            try await Task.detached(priority: .utility) {
+                try DataPersistence.save(snapshot, to: file)
+            }.value
             lastSaveError = nil
+            return true
         } catch {
             lastSaveError = error.localizedDescription
+            return false
         }
     }
 
-    private func saveFolders() {
+    @discardableResult
+    private func saveFolders() async -> Bool {
+        let snapshot = folders
+        let file = foldersFile
         do {
-            try DataPersistence.save(folders, to: foldersFile)
+            try await Task.detached(priority: .utility) {
+                try DataPersistence.save(snapshot, to: file)
+            }.value
             lastSaveError = nil
+            return true
         } catch {
             lastSaveError = error.localizedDescription
+            return false
         }
     }
 
