@@ -119,7 +119,11 @@ Nocturne/
 ├── Nocturne/
 │   ├── Model/           Song, Chord, Fragment, Recording
 │   ├── ViewModel/       Library, Song, Audio, Settings
-│   ├── View/            Library, Song editor, Recording, Profile
+│   ├── View/
+│   │   ├── Library/     Songs, folders, fragments list
+│   │   ├── Song/        Editor, chords, lyrics display
+│   │   ├── Recording/   Audio & video capture
+│   │   └── Profile/     Settings & security
 │   ├── Utilities/       Export, share links, persistence
 │   └── Assets.xcassets/ App icon, accent color
 ├── docs/screenshots/    README & marketing screenshots

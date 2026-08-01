@@ -19,6 +19,7 @@
 import Foundation
 import Combine
 
+@MainActor
 class SongViewModel: ObservableObject {
     @Published var song: Song
     @Published var isAnnotating = false
@@ -32,14 +33,16 @@ class SongViewModel: ObservableObject {
 
     enum SaveState { case saved, saving, unsaved }
 
-    var onUpdate: ((Song) -> Void)?
+    var onUpdate: ((Song) async -> Bool)?
     private var cancellables = Set<AnyCancellable>()
     private var undoStack: [String] = []
     private var redoStack: [String] = []
     private let maxUndoSteps = 50
     private var isUndoingOrRedoing = false
+    private var cachedLyrics = ""
+    private var cachedLines: [String] = []
 
-    init(song: Song, onUpdate: ((Song) -> Void)? = nil) {
+    init(song: Song, onUpdate: ((Song) async -> Bool)? = nil) {
         self.song = song
         self.onUpdate = onUpdate
         undoStack.append(song.lyrics)
@@ -60,19 +63,41 @@ class SongViewModel: ObservableObject {
             .debounce(for: .seconds(1), scheduler: RunLoop.main)
             .sink { [weak self] updatedSong in
                 guard let self else { return }
-                self.saveState = .saving
-                self.onUpdate?(updatedSong)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.saveState = .saved }
+                Task { @MainActor in
+                    self.saveState = .saving
+                    let ok = await self.onUpdate?(updatedSong) ?? true
+                    self.saveState = ok ? .saved : .unsaved
+                }
             }
             .store(in: &cancellables)
     }
 
-    var words: [String] {
-        song.lyrics.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+    var lyricsLines: [String] {
+        if song.lyrics != cachedLyrics {
+            cachedLyrics = song.lyrics
+            cachedLines = song.lyrics.components(separatedBy: "\n")
+        }
+        return cachedLines
     }
 
-    var lyricsLines: [String] {
-        song.lyrics.components(separatedBy: "\n")
+    var lyricLineItems: [LyricLineItem] {
+        lyricsLines.enumerated().map { index, line in
+            LyricLineItem(id: "\(index)-\(line.hashValue)", index: index)
+        }
+    }
+
+    func wordItems(inLine lineIndex: Int) -> [LyricWordItem] {
+        wordsInLine(lineIndex).enumerated().map { wordIndex, word in
+            LyricWordItem(id: "\(lineIndex)-\(wordIndex)-\(word)", index: wordIndex, word: word)
+        }
+    }
+
+    func chordWordIndices(forLine lineIndex: Int) -> Set<Int> {
+        Set(chords(forLineIndex: lineIndex).map(\.wordIndex))
+    }
+
+    var words: [String] {
+        song.lyrics.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
     }
 
     func wordsInLine(_ lineIndex: Int) -> [String] {

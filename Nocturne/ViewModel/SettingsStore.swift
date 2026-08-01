@@ -9,6 +9,7 @@
 import SwiftUI
 import Combine
 
+@MainActor
 class SettingsStore: ObservableObject {
 
     // MARK: - Writing
