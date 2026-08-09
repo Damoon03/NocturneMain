@@ -26,7 +26,7 @@ struct FragmentEditSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 20) {
                 // Header
                 HStack {
@@ -90,7 +90,7 @@ struct FragmentEditSheet: View {
             }
         }
         .presentationDetents([.fraction(0.55), .large])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
     }
 
     private func save() {

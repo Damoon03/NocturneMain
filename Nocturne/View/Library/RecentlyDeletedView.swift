@@ -20,7 +20,7 @@ struct RecentlyDeletedView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "trash").font(.system(size: 13, weight: .light)).foregroundStyle(.white.opacity(0.4))
@@ -132,7 +132,7 @@ struct RecentlyDeletedView: View {
         }
         .padding(.horizontal, 28).padding(.top, 8).padding(.bottom, 4)
         .listRowInsets(EdgeInsets())
-        .background(Color.black)
+        .background(Color.nocturneSheetBackground)
     }
 
     private func deletedSongRow(_ song: Song) -> some View {

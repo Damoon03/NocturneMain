@@ -13,7 +13,7 @@ struct FABMenuSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.white.opacity(0.12))
@@ -51,7 +51,7 @@ struct FABMenuSheet: View {
             }
         }
         .presentationDetents([.height(290)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
     }
 

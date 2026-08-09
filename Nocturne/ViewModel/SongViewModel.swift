@@ -31,6 +31,13 @@ class SongViewModel: ObservableObject {
     @Published var isAddingNote = false         // feature 4
     @Published var pendingNoteLineIndex: Int? = nil
 
+    // MARK: - Rhyme flow
+    @Published var isRhymePicking = false
+    @Published var isRhymeSheetPresented = false
+    @Published var rhymeSourceWord: String = ""
+    private var rhymeTargetLineIndex: Int? = nil
+    private var rhymeTargetWordIndex: Int? = nil
+
     enum SaveState { case saved, saving, unsaved }
 
     var onUpdate: ((Song) async -> Bool)?
@@ -127,8 +134,27 @@ class SongViewModel: ObservableObject {
     }
 
     // MARK: - Chord annotation flow
-    func startAnnotating() { isAnnotating = true }
+    func startAnnotating() {
+        if isRhymePicking { cancelRhymePicking() }
+        if isPickingLineForSection { cancelPickingLineForSection() }
+        if isPickingLineForNote { cancelPickingLineForNote() }
+        isAnnotating = true
+    }
     func cancelAnnotating() { annotationText = ""; isAnnotating = false }
+
+    /// Skips typing entirely — used by the "recent chords" quick-pick strip
+    /// in ChordSheetView to go straight into word-picking mode.
+    func quickPlaceChord(_ name: String) {
+        let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(10))
+        guard !trimmed.isEmpty else { return }
+        if isRhymePicking { cancelRhymePicking() }
+        if isPickingLineForSection { cancelPickingLineForSection() }
+        if isPickingLineForNote { cancelPickingLineForNote() }
+        pendingAnnotation = trimmed
+        annotationText = ""
+        isAnnotating = false
+        isPickingWord = true
+    }
 
     func confirmAnnotation() {
         let trimmed = annotationText.trimmingCharacters(in: .whitespaces)
@@ -184,6 +210,120 @@ class SongViewModel: ObservableObject {
     }
 
     var hasChords: Bool { !song.chords.isEmpty }
+
+    /// Distinct chord names already used in THIS song, most recently placed
+    /// first (scanning song.chords back-to-front, and each chord's merged
+    /// names back-to-front). Scoped per-song rather than a global MRU list,
+    /// since the chords relevant to what you're playing right now are the
+    /// ones already in this song.
+    var recentChordsInSong: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for chord in song.chords.reversed() {
+            for name in chord.names.reversed() {
+                let key = name.lowercased()
+                if seen.contains(key) { continue }
+                seen.insert(key)
+                result.append(name)
+                if result.count >= 8 { return result }
+            }
+        }
+        return result
+    }
+
+    // MARK: - Rhyme flow
+
+    /// Enters rhyme word-picking mode (tap a lyric word to look up rhymes for it).
+    func startRhymePicking() {
+        if isPickingWord { cancelPickingWord() }
+        if isAnnotating { cancelAnnotating() }
+        if isPickingLineForSection { cancelPickingLineForSection() }
+        if isPickingLineForNote { cancelPickingLineForNote() }
+        isRhymePicking = true
+    }
+
+    func cancelRhymePicking() { isRhymePicking = false }
+
+    /// Called when a word is tapped in rhyme-picking mode. Cleans the word,
+    /// stores the target position, and opens the rhyme sheet.
+    func selectRhymeTarget(lineIndex: Int, wordIndex: Int) {
+        let words = wordsInLine(lineIndex)
+        guard wordIndex >= 0 && wordIndex < words.count else { return }
+        let word = RhymeService.cleanWord(words[wordIndex])
+        guard !word.isEmpty else { return }
+
+        rhymeTargetLineIndex = lineIndex
+        rhymeTargetWordIndex = wordIndex
+        rhymeSourceWord = word
+        isRhymePicking = false
+        isRhymeSheetPresented = true
+    }
+
+    /// Replaces the target word in place, preserving surrounding punctuation
+    /// and capitalization (e.g. "Night," -> "Light,").
+    func replaceRhymeTarget(with newWord: String) {
+        guard let lineIndex = rhymeTargetLineIndex, let wordIndex = rhymeTargetWordIndex,
+              lineIndex >= 0 && lineIndex < lyricsLines.count else { return }
+
+        var lines = lyricsLines
+        let rawTokens = lines[lineIndex].components(separatedBy: " ")
+        var nonEmptyPositions: [Int] = []
+        for (i, token) in rawTokens.enumerated() where !token.isEmpty {
+            nonEmptyPositions.append(i)
+        }
+        guard wordIndex < nonEmptyPositions.count else { return }
+
+        let targetPosition = nonEmptyPositions[wordIndex]
+        var tokens = rawTokens
+        tokens[targetPosition] = preservingPunctuation(original: tokens[targetPosition], replacement: newWord)
+        lines[lineIndex] = tokens.joined(separator: " ")
+
+        song.lyrics = lines.joined(separator: "\n")
+        closeRhymeFlow()
+    }
+
+    /// Inserts `newWord` as a brand-new line right after the target line —
+    /// shifting any section labels / chords / notes on later lines down by
+    /// one, the same bookkeeping used by auto section detection.
+    func insertRhymeAsNewLine(_ newWord: String) {
+        guard let lineIndex = rhymeTargetLineIndex else { return }
+
+        var lines = lyricsLines
+        let insertAt = max(0, min(lineIndex + 1, lines.count))
+        lines.insert(newWord, at: insertAt)
+
+        shiftSectionLabels(fromIndex: insertAt, by: 1)
+        shiftChords(fromIndex: insertAt, by: 1)
+        shiftNotes(fromIndex: insertAt, by: 1)
+
+        song.lyrics = lines.joined(separator: "\n")
+        closeRhymeFlow()
+    }
+
+    func cancelRhymeSheet() { closeRhymeFlow() }
+
+    private func closeRhymeFlow() {
+        isRhymeSheetPresented = false
+        rhymeTargetLineIndex = nil
+        rhymeTargetWordIndex = nil
+        rhymeSourceWord = ""
+    }
+
+    /// Keeps the replacement's prefix/suffix punctuation and leading
+    /// capitalization from the original token, e.g. "(Night)" -> "(Light)".
+    private func preservingPunctuation(original: String, replacement: String) -> String {
+        let core = RhymeService.cleanWord(original)
+        guard !core.isEmpty, let range = original.range(of: core, options: .caseInsensitive) else {
+            return replacement
+        }
+        let prefix = String(original[original.startIndex..<range.lowerBound])
+        let suffix = String(original[range.upperBound...])
+        var body = replacement
+        if let firstChar = core.first, firstChar.isUppercase {
+            body = body.prefix(1).uppercased() + body.dropFirst()
+        }
+        return prefix + body + suffix
+    }
 
     // MARK: - Feature 4: Notes
     func note(forLineIndex lineIndex: Int) -> SongNote? {
@@ -260,6 +400,49 @@ class SongViewModel: ObservableObject {
 
     func sectionLabel(forLineIndex lineIndex: Int) -> SectionLabel? {
         song.sectionLabels.first { $0.lineIndex == lineIndex }
+    }
+
+    // MARK: - Section / note picking flow (top-strip "+Section" button)
+    @Published var isPickingLineForSection = false
+    @Published var pendingSectionType: SectionType? = nil
+    @Published var isPickingLineForNote = false
+
+    /// Called once a section type is chosen from the sheet — enters
+    /// line-picking mode (tap any line to attach the label there).
+    func startPickingLineForSection(_ type: SectionType) {
+        if isPickingWord { cancelPickingWord() }
+        if isRhymePicking { cancelRhymePicking() }
+        if isAnnotating { cancelAnnotating() }
+        if isPickingLineForNote { cancelPickingLineForNote() }
+        pendingSectionType = type
+        isPickingLineForSection = true
+    }
+
+    func cancelPickingLineForSection() {
+        pendingSectionType = nil
+        isPickingLineForSection = false
+    }
+
+    /// Called when "Add a Note" is chosen from the section sheet — enters
+    /// line-picking mode (tap any line to attach a note to it).
+    func startPickingNote() {
+        if isPickingWord { cancelPickingWord() }
+        if isRhymePicking { cancelRhymePicking() }
+        if isAnnotating { cancelAnnotating() }
+        if isPickingLineForSection { cancelPickingLineForSection() }
+        isPickingLineForNote = true
+    }
+
+    func cancelPickingLineForNote() {
+        isPickingLineForNote = false
+    }
+
+    /// Called when a line is tapped in line-picking mode.
+    func placePendingSection(atLineIndex lineIndex: Int) {
+        guard let type = pendingSectionType else { return }
+        addSection(type, atLineIndex: lineIndex)
+        pendingSectionType = nil
+        isPickingLineForSection = false
     }
 
     // MARK: - Auto section detection

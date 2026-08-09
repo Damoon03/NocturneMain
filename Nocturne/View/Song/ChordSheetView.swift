@@ -52,11 +52,42 @@ struct ChordSheetView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 24) {
                 Text("Add a Chord").foregroundStyle(.white).font(.headline).kerning(1)
                 Text("Type a chord to place above a word in your lyrics.")
                     .foregroundStyle(.gray).font(.system(size: 13)).multilineTextAlignment(.center).padding(.horizontal)
+
+                // Recent chords — scoped to this song only. Tap to skip
+                // typing and go straight into word-picking mode.
+                if !viewModel.recentChordsInSong.isEmpty {
+                    HStack(spacing: 10) {
+                        Text("Recent:")
+                            .foregroundStyle(.gray)
+                            .font(.system(size: 14, weight: .medium))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(viewModel.recentChordsInSong, id: \.self) { name in
+                                    Button(action: {
+                                        HapticManager.impact(.light)
+                                        viewModel.quickPlaceChord(name)
+                                    }) {
+                                        Text(name)
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundStyle(.white.opacity(0.85))
+                                            .padding(.horizontal, 12).padding(.vertical, 8)
+                                            .background(
+                                                Capsule().fill(Color.white.opacity(0.07))
+                                                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+
                 TextField("e.g. [Em]", text: $viewModel.annotationText)
                     .font(.system(size: 15, design: .monospaced)).padding()
                     .background(.white.opacity(0.08)).foregroundStyle(.white).tint(.white)
@@ -84,6 +115,6 @@ struct ChordSheetView: View {
             .padding(.top, 40)
         }
         .presentationDetents([.fraction(hasChords ? 0.58 : 0.45)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
     }
 }

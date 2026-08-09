@@ -5,6 +5,7 @@
 //  Created by Damoon saber on 3/28/1405 AP.
 //
 
+
 import SwiftUI
 
 struct ContentView: View {
@@ -22,6 +23,7 @@ struct ContentView: View {
     @State private var editingNote: NoteEditContext? = nil
     @State private var noteText: String = ""
     @State private var sharePayload: SharePayload? = nil
+    @State private var showingSectionChooser = false
 
     var onSave: ((Song) async -> Bool)?
     var onDismiss: ((Song) async -> Void)?
@@ -91,38 +93,59 @@ struct ContentView: View {
 
                 // MARK: - Toolbar
                 HStack(spacing: 12) {
-                    Button(action: { showingRecordings = true }) {
-                        HStack(spacing: 5) {
-                            ZStack {
-                                Circle()
-                                    .fill(audioVM.isRecording ? Color.red.opacity(0.9) : Color.white.opacity(0.08))
-                                    .frame(width: 16, height: 16)
-                                if audioVM.isRecording {
-                                    RoundedRectangle(cornerRadius: 2).fill(.white).frame(width: 6, height: 6)
-                                } else {
-                                    Circle().fill(.red.opacity(0.8)).frame(width: 6, height: 6)
-                                }
+                    if isFocused {
+                        Button(action: {
+                            isFocused = false
+                            viewModel.startRhymePicking()
+                            HapticManager.impact(.light)
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "quote.bubble").font(.system(size: 11, weight: .medium))
+                                Text("Rhyme").font(.system(size: 12, weight: .medium)).lineLimit(1)
                             }
-                            Text(audioVM.isRecording ? audioVM.formattedTime(audioVM.recordingTime) : "Record")
-                                .font(.system(size: 12, weight: .medium,
-                                              design: audioVM.isRecording ? .monospaced : .default))
-                                .foregroundStyle(audioVM.isRecording ? .red : .white.opacity(0.7))
+                            .fixedSize()
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(Color.white.opacity(0.06))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                            )
                         }
-                        .foregroundStyle(.white.opacity(0.7))
-                        .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(
-                            Capsule()
-                                .fill(audioVM.isRecording ? Color.red.opacity(0.12) : Color.white.opacity(0.06))
-                                .overlay(Capsule().stroke(
-                                    audioVM.isRecording ? Color.red.opacity(0.4) : Color.white.opacity(0.1),
-                                    lineWidth: 0.5))
-                        )
+                        .accessibilityLabel("Find rhymes")
+                    } else {
+                        Button(action: { showingRecordings = true }) {
+                            HStack(spacing: 5) {
+                                ZStack {
+                                    Circle()
+                                        .fill(audioVM.isRecording ? Color.red.opacity(0.9) : Color.white.opacity(0.08))
+                                        .frame(width: 16, height: 16)
+                                    if audioVM.isRecording {
+                                        RoundedRectangle(cornerRadius: 2).fill(.white).frame(width: 6, height: 6)
+                                    } else {
+                                        Circle().fill(.red.opacity(0.8)).frame(width: 6, height: 6)
+                                    }
+                                }
+                                Text(audioVM.isRecording ? audioVM.formattedTime(audioVM.recordingTime) : "Record")
+                                    .font(.system(size: 12, weight: .medium,
+                                                  design: audioVM.isRecording ? .monospaced : .default))
+                                    .foregroundStyle(audioVM.isRecording ? .red : .white.opacity(0.7))
+                            }
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(audioVM.isRecording ? Color.red.opacity(0.12) : Color.white.opacity(0.06))
+                                    .overlay(Capsule().stroke(
+                                        audioVM.isRecording ? Color.red.opacity(0.4) : Color.white.opacity(0.1),
+                                        lineWidth: 0.5))
+                            )
+                        }
+                        .accessibilityLabel(audioVM.isRecording ? "Stop recording" : "Open recordings")
                     }
-                    .accessibilityLabel(audioVM.isRecording ? "Stop recording" : "Open recordings")
 
                     Spacer()
 
-                    if viewModel.isPickingWord {
+                    if viewModel.isPickingWord || viewModel.isRhymePicking || viewModel.isPickingLineForSection || viewModel.isPickingLineForNote {
                         EmptyView()
                     } else if isFocused {
                         Button("Done") {
@@ -156,7 +179,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 28).padding(.bottom, 10)
 
-                // Picking word prompt
+                // Picking word prompt (chord placement)
                 if viewModel.isPickingWord {
                     HStack {
                         Image(systemName: "hand.tap").font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
@@ -169,8 +192,48 @@ struct ContentView: View {
                     .padding(.horizontal, 28).padding(.bottom, 10)
                 }
 
+                // Picking word prompt (rhyme lookup)
+                if viewModel.isRhymePicking {
+                    HStack {
+                        Image(systemName: "hand.tap").font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
+                        Text("Tap a word for rhymes").foregroundStyle(.white.opacity(0.4)).font(.system(size: 12, design: .monospaced))
+                        Spacer()
+                        Button("Cancel", action: viewModel.cancelRhymePicking).foregroundStyle(.white.opacity(0.4)).font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 28).padding(.bottom, 10)
+                }
+
+                // Picking line prompt (section placement)
+                if viewModel.isPickingLineForSection {
+                    HStack {
+                        Image(systemName: "hand.tap").font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
+                        Text("Tap a line for").foregroundStyle(.white.opacity(0.4)).font(.system(size: 12, design: .monospaced))
+                        Text(viewModel.pendingSectionType?.rawValue ?? "").foregroundStyle(.white.opacity(0.7)).font(.system(size: 12, weight: .medium, design: .monospaced))
+                        Spacer()
+                        Button("Cancel", action: viewModel.cancelPickingLineForSection).foregroundStyle(.white.opacity(0.4)).font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 28).padding(.bottom, 10)
+                }
+
+                // Picking line prompt (note placement)
+                if viewModel.isPickingLineForNote {
+                    HStack {
+                        Image(systemName: "hand.tap").font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
+                        Text("Choose a line to attach your note")
+                            .foregroundStyle(.white.opacity(0.4))
+                            .font(.system(size: 12, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Spacer()
+                        Button("Cancel", action: viewModel.cancelPickingLineForNote)
+                            .foregroundStyle(.white.opacity(0.4))
+                            .font(.system(size: 12))
+                    }
+                    .padding(.horizontal, 28).padding(.bottom, 10)
+                }
+
                 // Section label strip (edit mode)
-                if isFocused && !viewModel.song.sectionLabels.isEmpty {
+                if isFocused {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(viewModel.song.sectionLabels.sorted { $0.lineIndex < $1.lineIndex }) { label in
@@ -182,10 +245,23 @@ struct ContentView: View {
                                     .padding(.horizontal, 7).padding(.vertical, 3)
                                     .background(Capsule().fill(color.opacity(0.08)).overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5)))
                             }
+                            Button(action: {
+                                showingSectionChooser = true
+                                HapticManager.impact(.light)
+                            }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "plus").font(.system(size: 8, weight: .semibold))
+                                }
+                                .foregroundStyle(.white.opacity(0.4))
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(Capsule().fill(Color.white.opacity(0.05)).overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5)))
+                            }
+                            .frame(width: 40, height: 40)
+                            .padding(.leading, -5)
                         }
                         .padding(.horizontal, 28)
+                        .padding(.top, -10)
                     }
-                    .padding(.bottom, 8)
                     .transition(.opacity)
                     .motionAwareAnimation(.easeInOut(duration: 0.2), value: isFocused)
                 }
@@ -199,6 +275,12 @@ struct ContentView: View {
                     Group {
                         if viewModel.isPickingWord {
                             wordPickerView
+                        } else if viewModel.isRhymePicking {
+                            rhymePickerView
+                        } else if viewModel.isPickingLineForSection {
+                            sectionLinePickerView
+                        } else if viewModel.isPickingLineForNote {
+                            noteLinePickerView
                         } else {
                             ZStack {
                                 LyricsTextView(
@@ -234,10 +316,35 @@ struct ContentView: View {
             }
         }
         .sheet(item: $editingNote) { context in
-            noteEditorSheet(lineIndex: context.lineIndex)
+            NoteEditorSheet(
+                lineIndex: context.lineIndex,
+                noteText: $noteText,
+                viewModel: viewModel,
+                onDismiss: { editingNote = nil }
+            )
         }
         .sheet(isPresented: $viewModel.isAnnotating) {
             ChordSheetView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.isRhymeSheetPresented) {
+            RhymeSheetView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showingSectionChooser) {
+            SectionTypeChooserSheet(
+                onSelect: { type in
+                    isFocused = false
+                    viewModel.startPickingLineForSection(type)
+                    showingSectionChooser = false
+                },
+                onAddNote: {
+                    isFocused = false
+                    showingSectionChooser = false
+                    viewModel.startPickingNote()
+                },
+                onCancel: {
+                    showingSectionChooser = false
+                }
+            )
         }
         .sheet(isPresented: $showingRecordings) {
             RecordingsSheetView(
@@ -289,53 +396,91 @@ struct ContentView: View {
     }
 
     // MARK: - Note editor sheet
-    private func noteEditorSheet(lineIndex: Int) -> some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 20) {
-                HStack {
-                    Button("Cancel") { editingNote = nil }
-                        .foregroundStyle(.white.opacity(0.4)).font(.system(size: 14))
-                    Spacer()
-                    Text("Line Note")
-                        .foregroundStyle(.white).font(.system(size: 15, weight: .medium))
-                    Spacer()
-                    Button("Save") {
-                        viewModel.addNote(noteText, atLineIndex: lineIndex)
-                        HapticManager.success()
-                        editingNote = nil
-                    }
-                    .foregroundStyle(.white.opacity(0.85)).font(.system(size: 14, weight: .medium))
-                }
-                .padding(.horizontal, 20).padding(.top, 24)
+    struct NoteEditorSheet: View {
+        let lineIndex: Int
+        @Binding var noteText: String
+        let viewModel: SongViewModel
+        let onDismiss: () -> Void
 
-                TextField("Add a note for this line…", text: $noteText, axis: .vertical)
-                    .font(.system(size: 14).italic())
-                    .foregroundStyle(Color(red: 0.486, green: 0.553, blue: 0.651))
-                    .tint(.white)
-                    .lineLimit(3)
-                    .padding()
-                    .background(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.2), lineWidth: 0.5))
+        @FocusState private var isNoteFocused: Bool
+
+        var body: some View {
+            ZStack {
+                Color.nocturneSheetBackground.ignoresSafeArea()
+                VStack(spacing: 20) {
+                    HStack {
+                        Button("Cancel") {
+                            isNoteFocused = false
+                            onDismiss()
+                        }
+                        .foregroundStyle(.white.opacity(0.4))
+                        .font(.system(size: 14))
+
+                        Spacer()
+
+                        Text("Line Note")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .medium))
+
+                        Spacer()
+
+                        Button("Save") {
+                            isNoteFocused = false
+                            viewModel.addNote(noteText, atLineIndex: lineIndex)
+                            HapticManager.success()
+                            onDismiss()
+                        }
+                        .foregroundStyle(.white.opacity(0.85))
+                        .font(.system(size: 14, weight: .medium))
+                    }
                     .padding(.horizontal, 20)
+                    .padding(.top, 24)
 
-                if viewModel.note(forLineIndex: lineIndex) != nil {
-                    Button(role: .destructive) {
-                        viewModel.removeNote(atLineIndex: lineIndex)
-                        editingNote = nil
-                    } label: {
-                        Label("Remove note", systemImage: "trash")
-                            .font(.system(size: 13)).foregroundStyle(.red.opacity(0.6))
+                    TextField("Add a note for this line…", text: $noteText, axis: .vertical)
+                        .font(.system(size: 14).italic())
+                        .foregroundStyle(Color(red: 0.486, green: 0.553, blue: 0.651))
+                        .tint(.white)
+                        .lineLimit(3)
+                        .padding()
+                        .background(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color(red: 0.486, green: 0.553, blue: 0.651).opacity(0.2), lineWidth: 0.5)
+                        )
+                        .padding(.horizontal, 20)
+                        .focused($isNoteFocused)
+
+                    if viewModel.note(forLineIndex: lineIndex) != nil {
+                        Button(role: .destructive) {
+                            isNoteFocused = false
+                            viewModel.removeNote(atLineIndex: lineIndex)
+                            onDismiss()
+                        } label: {
+                            Label("Remove note", systemImage: "trash")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.red.opacity(0.6))
+                        }
                     }
+
+                    Spacer()
                 }
-                Spacer()
+            }
+            .presentationDetents([.fraction(0.45)])
+            .presentationBackground(Color.nocturneSheetBackground)
+            .onAppear {
+                // Force keyboard to stay closed
+                isNoteFocused = false
+                DispatchQueue.main.async {
+                    isNoteFocused = false
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
             }
         }
-        .presentationDetents([.fraction(0.45)])
-        .presentationBackground(Color.black)
     }
-
     // MARK: - Lyrics display (read mode)
     private var lyricsDisplayView: some View {
         LyricsWithChordsView(
@@ -417,6 +562,136 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, lineSpacing / 2)
                     }
+                }
+            }
+            .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Word picker (rhyme lookup)
+    private var rhymePickerView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: lineSpacing) {
+                ForEach(viewModel.lyricLineItems) { lineItem in
+                    let lineIndex = lineItem.index
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
+                            SectionLabelView(label: label) { viewModel.removeSection(atLineIndex: lineIndex) }
+                                .padding(.bottom, 4)
+                        }
+                        FlowLayout(spacing: 0) {
+                            ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
+                                Button(action: {
+                                    viewModel.selectRhymeTarget(lineIndex: lineIndex, wordIndex: wordItem.index)
+                                    HapticManager.impact(.medium)
+                                }) {
+                                    Text(wordItem.word + " ")
+                                        .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                        .foregroundStyle(.white)
+                                        .underline(color: .white.opacity(0.25))
+                                        .fixedSize()
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, lineSpacing / 2)
+                    }
+                }
+            }
+            .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Line picker (section placement)
+    private var sectionLinePickerView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: lineSpacing) {
+                ForEach(viewModel.lyricLineItems) { lineItem in
+                    let lineIndex = lineItem.index
+                    let lineText = viewModel.lyricsLines[lineIndex]
+                    let isBlank = lineText.trimmingCharacters(in: .whitespaces).isEmpty
+
+                    Button(action: {
+                        viewModel.placePendingSection(atLineIndex: lineIndex)
+                        HapticManager.impact(.medium)
+                    }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
+                                    let c = label.type.color
+                                    let color = Color(red: c.r, green: c.g, blue: c.b)
+                                    Text(label.type.rawValue.uppercased())
+                                        .font(.system(size: 8, weight: .semibold, design: .monospaced)).kerning(1)
+                                        .foregroundStyle(color.opacity(0.8))
+                                        .padding(.horizontal, 7).padding(.vertical, 3)
+                                        .background(Capsule().fill(color.opacity(0.08)).overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5)))
+                                }
+                                Text(isBlank ? "(empty line)" : lineText)
+                                    .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(isBlank ? .white.opacity(0.2) : .white)
+                                    .italic(isBlank)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Line picker (note placement)
+    private var noteLinePickerView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: lineSpacing) {
+                ForEach(viewModel.lyricLineItems) { lineItem in
+                    let lineIndex = lineItem.index
+                    let lineText = viewModel.lyricsLines[lineIndex]
+                    let isBlank = lineText.trimmingCharacters(in: .whitespaces).isEmpty
+
+                    Button(action: {
+                        noteText = viewModel.note(forLineIndex: lineIndex)?.text ?? ""
+                        editingNote = NoteEditContext(lineIndex: lineIndex)
+                        
+                        // Dismiss lyrics keyboard + exit picking mode
+                        isFocused = false
+                        viewModel.cancelPickingLineForNote()
+                        
+                        HapticManager.impact(.medium)
+                    }) {                    
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
+                                    let c = label.type.color
+                                    let color = Color(red: c.r, green: c.g, blue: c.b)
+                                    Text(label.type.rawValue.uppercased())
+                                        .font(.system(size: 8, weight: .semibold, design: .monospaced)).kerning(1)
+                                        .foregroundStyle(color.opacity(0.8))
+                                        .padding(.horizontal, 7).padding(.vertical, 3)
+                                        .background(Capsule().fill(color.opacity(0.08)).overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5)))
+                                }
+                                Text(isBlank ? "(empty line)" : lineText)
+                                    .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(isBlank ? .white.opacity(0.2) : .white)
+                                    .italic(isBlank)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)

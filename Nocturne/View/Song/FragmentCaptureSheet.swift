@@ -27,7 +27,7 @@ struct FragmentCaptureSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
 
             VStack(spacing: 20) {
                 Text("Capture a fragment")
@@ -91,7 +91,7 @@ struct FragmentCaptureSheet: View {
             }
         }
         .presentationDetents([.fraction(0.5)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if selectedType != .riff {

@@ -243,7 +243,7 @@ struct AttachFragmentSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text("Attach to song")
                     .foregroundStyle(.white)
@@ -289,6 +289,6 @@ struct AttachFragmentSheet: View {
             }
         }
         .presentationDetents([.fraction(0.55)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
     }
 }

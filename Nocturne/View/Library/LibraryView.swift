@@ -105,6 +105,7 @@ struct LibraryView: View {
                     showingFolderDetail = nil
                 }
             }
+            .presentationBackground(Color.nocturneSheetBackground)
         }
         .sheet(item: $movingSong) { song in
             MoveSongToFolderSheet(song: song, libraryVM: libraryViewModel) { movingSong = nil }
@@ -112,11 +113,11 @@ struct LibraryView: View {
         .sheet(isPresented: $showingRecentlyDeleted) {
             RecentlyDeletedView(libraryVM: libraryViewModel, fragmentsVM: fragmentsViewModel)
                 .presentationDetents([.fraction(0.65), .large])
-                .presentationBackground(Color.black)
+                .presentationBackground(Color.nocturneSheetBackground)
         }
         .sheet(isPresented: $showingProfile) {
             ProfileView(settings: settings, libraryVM: libraryViewModel, fragmentsVM: fragmentsViewModel, onDismiss: { showingProfile = false })
-                .presentationBackground(Color.black)
+                .presentationBackground(Color.nocturneSheetBackground)
         }
         .sheet(item: $sharePayload) { payload in
             ShareSheet(items: payload.items)

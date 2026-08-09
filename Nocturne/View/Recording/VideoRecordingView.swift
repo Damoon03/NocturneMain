@@ -16,7 +16,7 @@ struct VideoRecorderView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Title
@@ -118,7 +118,7 @@ struct VideoRecorderView: View {
             }
         }
         .presentationDetents([.fraction(0.88)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
         .onDisappear {
             vm.stopRecording()
@@ -148,7 +148,7 @@ struct VideoNoteSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 HStack {
@@ -222,7 +222,7 @@ struct VideoNoteSheet: View {
             }
         }
         .presentationDetents([.fraction(0.75)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
         .onDisappear { isPlaying = false }
     }

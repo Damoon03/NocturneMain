@@ -92,7 +92,7 @@ struct RecordingsSheetView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
 
@@ -244,7 +244,7 @@ struct RecordingsSheetView: View {
         }
         .motionAwareAnimation(.easeInOut(duration: 0.2), value: recordingToDelete?.id)
         .presentationDetents([.fraction(0.55), .large])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .sheet(isPresented: $showingVideoRecorder) {
             VideoRecorderView(
                 songID: viewModel.song.id,

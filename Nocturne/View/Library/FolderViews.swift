@@ -14,7 +14,7 @@ struct CreateFolderSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 24) {
                 Text("New Folder")
                     .foregroundStyle(.white).font(.system(size: 16, weight: .medium)).padding(.top, 32)
@@ -45,7 +45,7 @@ struct CreateFolderSheet: View {
             }
         }
         .presentationDetents([.fraction(0.4)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focused = true } }
     }
 }
@@ -57,7 +57,7 @@ struct MoveSongToFolderSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 Text("Move to Folder")
                     .foregroundStyle(.white).font(.system(size: 16, weight: .medium))
@@ -77,7 +77,7 @@ struct MoveSongToFolderSheet: View {
             }
         }
         .presentationDetents([.fraction(0.5), .large])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
     }
 
     private func folderRow(id: UUID?, name: String, icon: String) -> some View {
@@ -120,7 +120,7 @@ struct FolderDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "folder")

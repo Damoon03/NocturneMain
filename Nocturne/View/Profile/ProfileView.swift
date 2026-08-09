@@ -32,7 +32,7 @@ struct ProfileView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 0) {

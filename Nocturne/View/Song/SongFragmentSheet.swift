@@ -28,7 +28,7 @@ struct SongFragmentsSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 // Header
                 Text("All Fragments")
@@ -85,7 +85,7 @@ struct SongFragmentsSheet: View {
             }
         }
         .presentationDetents([.fraction(0.65), .large])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .sheet(item: $editingFragment) { fragment in
             FragmentEditSheet(fragmentsVM: fragmentsVM, fragment: fragment) {
                 editingFragment = nil

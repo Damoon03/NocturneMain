@@ -14,7 +14,7 @@ struct DeleteConfirmSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 Spacer()
                 ZStack {
@@ -48,7 +48,7 @@ struct DeleteConfirmSheet: View {
             }
         }
         .presentationDetents([.fraction(0.38)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
     }
 }
@@ -62,7 +62,7 @@ struct PermanentDeleteSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.nocturneSheetBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 Spacer()
                 ZStack {
@@ -97,7 +97,7 @@ struct PermanentDeleteSheet: View {
             }
         }
         .presentationDetents([.fraction(0.38)])
-        .presentationBackground(Color.black)
+        .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
     }
 }

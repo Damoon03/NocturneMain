@@ -33,7 +33,7 @@ enum SectionType: String, Codable, CaseIterable, Hashable {
         case .bridge:  return (0.6, 1.0, 0.7)
         case .intro:   return (1.0, 0.85, 0.4)
         case .outro:   return (0.8, 0.5, 1.0)
-        case .hook:    return (1.0, 0.6, 0.85)
+        case .hook: return (0.2, 0.85, 0.8)
         }
     }
 }
