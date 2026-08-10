@@ -48,6 +48,7 @@ struct TransposeView: View {
 
 struct ChordSheetView: View {
     @ObservedObject var viewModel: SongViewModel
+    @ObservedObject var settings: SettingsStore
     private var hasChords: Bool { viewModel.hasChords }
 
     var body: some View {
@@ -58,18 +59,19 @@ struct ChordSheetView: View {
                 Text("Type a chord to place above a word in your lyrics.")
                     .foregroundStyle(.gray).font(.system(size: 13)).multilineTextAlignment(.center).padding(.horizontal)
 
-                // Recent chords — scoped to this song only. Tap to skip
-                // typing and go straight into word-picking mode.
-                if !viewModel.recentChordsInSong.isEmpty {
+                // Recent chords — tap to skip typing and go straight into
+                // word-picking mode.
+                if !settings.recentChords.isEmpty {
                     HStack(spacing: 10) {
                         Text("Recent:")
                             .foregroundStyle(.gray)
                             .font(.system(size: 14, weight: .medium))
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(viewModel.recentChordsInSong, id: \.self) { name in
+                                ForEach(settings.recentChords, id: \.self) { name in
                                     Button(action: {
                                         HapticManager.impact(.light)
+                                        settings.pushRecentChord(name)
                                         viewModel.quickPlaceChord(name)
                                     }) {
                                         Text(name)
@@ -97,7 +99,11 @@ struct ChordSheetView: View {
                             viewModel.annotationText = String(newValue.prefix(10))
                         }
                     }
-                Button(action: viewModel.confirmAnnotation) {
+                Button(action: {
+                    let typed = viewModel.annotationText.trimmingCharacters(in: .whitespaces)
+                    if !typed.isEmpty { settings.pushRecentChord(String(typed.prefix(10))) }
+                    viewModel.confirmAnnotation()
+                }) {
                     Text("Choose Word →")
                         .foregroundStyle(.black).font(.system(size: 15, weight: .medium))
                         .frame(maxWidth: .infinity).padding()

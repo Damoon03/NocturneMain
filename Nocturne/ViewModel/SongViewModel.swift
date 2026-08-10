@@ -137,7 +137,6 @@ class SongViewModel: ObservableObject {
     func startAnnotating() {
         if isRhymePicking { cancelRhymePicking() }
         if isPickingLineForSection { cancelPickingLineForSection() }
-        if isPickingLineForNote { cancelPickingLineForNote() }
         isAnnotating = true
     }
     func cancelAnnotating() { annotationText = ""; isAnnotating = false }
@@ -149,7 +148,6 @@ class SongViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
         if isRhymePicking { cancelRhymePicking() }
         if isPickingLineForSection { cancelPickingLineForSection() }
-        if isPickingLineForNote { cancelPickingLineForNote() }
         pendingAnnotation = trimmed
         annotationText = ""
         isAnnotating = false
@@ -211,26 +209,6 @@ class SongViewModel: ObservableObject {
 
     var hasChords: Bool { !song.chords.isEmpty }
 
-    /// Distinct chord names already used in THIS song, most recently placed
-    /// first (scanning song.chords back-to-front, and each chord's merged
-    /// names back-to-front). Scoped per-song rather than a global MRU list,
-    /// since the chords relevant to what you're playing right now are the
-    /// ones already in this song.
-    var recentChordsInSong: [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        for chord in song.chords.reversed() {
-            for name in chord.names.reversed() {
-                let key = name.lowercased()
-                if seen.contains(key) { continue }
-                seen.insert(key)
-                result.append(name)
-                if result.count >= 8 { return result }
-            }
-        }
-        return result
-    }
-
     // MARK: - Rhyme flow
 
     /// Enters rhyme word-picking mode (tap a lyric word to look up rhymes for it).
@@ -238,7 +216,6 @@ class SongViewModel: ObservableObject {
         if isPickingWord { cancelPickingWord() }
         if isAnnotating { cancelAnnotating() }
         if isPickingLineForSection { cancelPickingLineForSection() }
-        if isPickingLineForNote { cancelPickingLineForNote() }
         isRhymePicking = true
     }
 
@@ -402,39 +379,48 @@ class SongViewModel: ObservableObject {
         song.sectionLabels.first { $0.lineIndex == lineIndex }
     }
 
-    // MARK: - Section / note picking flow (top-strip "+Section" button)
+    // MARK: - Section picking flow (top-strip "+Section" button)
+    @Published var isChoosingSectionType = false
     @Published var isPickingLineForSection = false
     @Published var pendingSectionType: SectionType? = nil
     @Published var isPickingLineForNote = false
 
-    /// Called once a section type is chosen from the sheet — enters
-    /// line-picking mode (tap any line to attach the label there).
+    func startPickingNote() {
+        isPickingLineForNote = true
+    }
+
+    func cancelPickingLineForNote() {
+        isPickingLineForNote = false
+    }
+    
     func startPickingLineForSection(_ type: SectionType) {
+        pendingSectionType = type
+        isPickingLineForSection = true
+    }
+
+    /// Opens the section-type chooser sheet.
+    func startSectionTypeChoice() {
         if isPickingWord { cancelPickingWord() }
         if isRhymePicking { cancelRhymePicking() }
         if isAnnotating { cancelAnnotating() }
-        if isPickingLineForNote { cancelPickingLineForNote() }
+        isChoosingSectionType = true
+    }
+
+    func cancelSectionTypeChoice() {
+        isChoosingSectionType = false
+    }
+
+    /// Called once a section type is chosen — closes the chooser and enters
+    /// line-picking mode (tap any line to attach the label there).
+    func chooseSectionType(_ type: SectionType) {
         pendingSectionType = type
+        isChoosingSectionType = false
         isPickingLineForSection = true
     }
 
     func cancelPickingLineForSection() {
         pendingSectionType = nil
         isPickingLineForSection = false
-    }
-
-    /// Called when "Add a Note" is chosen from the section sheet — enters
-    /// line-picking mode (tap any line to attach a note to it).
-    func startPickingNote() {
-        if isPickingWord { cancelPickingWord() }
-        if isRhymePicking { cancelRhymePicking() }
-        if isAnnotating { cancelAnnotating() }
-        if isPickingLineForSection { cancelPickingLineForSection() }
-        isPickingLineForNote = true
-    }
-
-    func cancelPickingLineForNote() {
-        isPickingLineForNote = false
     }
 
     /// Called when a line is tapped in line-picking mode.

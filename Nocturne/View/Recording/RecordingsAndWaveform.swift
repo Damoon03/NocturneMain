@@ -85,6 +85,7 @@ struct RecordingsSheetView: View {
     @State private var showingVideoRecorder = false
     @State private var playingVideoNote: Recording? = nil
     @State private var recordingToDelete: Recording? = nil
+    @State private var sharePayload: SharePayload? = nil
 
     private var audioRecordings: [Recording] { viewModel.song.recordings.filter { $0.kind == .audio } }
     private var videoNotes: [Recording] { viewModel.song.recordings.filter { $0.kind == .video } }
@@ -265,6 +266,9 @@ struct RecordingsSheetView: View {
                 )
             )
         }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(items: payload.items)
+        }
     }
 
     @ViewBuilder
@@ -336,6 +340,18 @@ struct RecordingsSheetView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                sharePayload = SharePayload(items: [note.fileURL])
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) {
+                recordingToDelete = note
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     // MARK: - Active audio player
@@ -399,6 +415,12 @@ struct RecordingsSheetView: View {
 
             Spacer()
 
+            Button("Share recording", systemImage: "square.and.arrow.up") {
+                sharePayload = SharePayload(items: [recording.fileURL])
+            }
+            .labelStyle(.iconOnly)
+            .foregroundStyle(.white.opacity(0.3))
+
             Button("Delete recording", systemImage: "trash") { recordingToDelete = recording }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(.white.opacity(0.2))
@@ -409,6 +431,18 @@ struct RecordingsSheetView: View {
                 .fill(Color.white.opacity(isActive ? 0.06 : 0.03))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.07), lineWidth: 0.5))
         )
+        .contextMenu {
+            Button {
+                sharePayload = SharePayload(items: [recording.fileURL])
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) {
+                recordingToDelete = recording
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     private func formatDate(_ date: Date) -> String {

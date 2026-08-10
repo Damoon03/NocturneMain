@@ -4,6 +4,7 @@
 //
 //  Created by Damoon saber on 3/28/1405 AP.
 //
+//
 
 
 import SwiftUI
@@ -23,7 +24,7 @@ struct ContentView: View {
     @State private var editingNote: NoteEditContext? = nil
     @State private var noteText: String = ""
     @State private var sharePayload: SharePayload? = nil
-    @State private var showingSectionChooser = false
+    @State private var showingSectionChooser = false          // ← added
 
     var onSave: ((Song) async -> Bool)?
     var onDismiss: ((Song) async -> Void)?
@@ -52,7 +53,8 @@ struct ContentView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-
+                Spacer()
+                
                 // MARK: - Title
                 HStack {
                     TextField("untitled", text: $viewModel.song.title)
@@ -215,15 +217,15 @@ struct ContentView: View {
                     .padding(.horizontal, 28).padding(.bottom, 10)
                 }
 
-                // Picking line prompt (note placement)
+                // Picking line prompt (note placement)          ← NEW
                 if viewModel.isPickingLineForNote {
                     HStack {
                         Image(systemName: "hand.tap").font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
                         Text("Choose a line to attach your note")
                             .foregroundStyle(.white.opacity(0.4))
                             .font(.system(size: 12, design: .monospaced))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
+                            .lineLimit(1)                    // ← forces single line
+                            .minimumScaleFactor(0.85)        // ← shrinks slightly if needed
                         Spacer()
                         Button("Cancel", action: viewModel.cancelPickingLineForNote)
                             .foregroundStyle(.white.opacity(0.4))
@@ -279,7 +281,7 @@ struct ContentView: View {
                             rhymePickerView
                         } else if viewModel.isPickingLineForSection {
                             sectionLinePickerView
-                        } else if viewModel.isPickingLineForNote {
+                        } else if viewModel.isPickingLineForNote {          // ← NEW
                             noteLinePickerView
                         } else {
                             ZStack {
@@ -324,7 +326,7 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $viewModel.isAnnotating) {
-            ChordSheetView(viewModel: viewModel)
+            ChordSheetView(viewModel: viewModel, settings: settings)
         }
         .sheet(isPresented: $viewModel.isRhymeSheetPresented) {
             RhymeSheetView(viewModel: viewModel)
@@ -332,12 +334,10 @@ struct ContentView: View {
         .sheet(isPresented: $showingSectionChooser) {
             SectionTypeChooserSheet(
                 onSelect: { type in
-                    isFocused = false
-                    viewModel.startPickingLineForSection(type)
+                    viewModel.startPickingLineForSection(type)   // ← adjust name if different in your ViewModel
                     showingSectionChooser = false
                 },
                 onAddNote: {
-                    isFocused = false
                     showingSectionChooser = false
                     viewModel.startPickingNote()
                 },
@@ -649,7 +649,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Line picker (note placement)
+    // MARK: - Line picker (note placement)          ← NEW
     private var noteLinePickerView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: lineSpacing) {
@@ -667,7 +667,7 @@ struct ContentView: View {
                         viewModel.cancelPickingLineForNote()
                         
                         HapticManager.impact(.medium)
-                    }) {                    
+                    }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {

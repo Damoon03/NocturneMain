@@ -145,6 +145,7 @@ struct VideoNoteSheet: View {
     @Binding var isPresented: Bool
 
     @State private var isPlaying = true
+    @State private var sharePayload: SharePayload? = nil
 
     var body: some View {
         ZStack {
@@ -160,12 +161,20 @@ struct VideoNoteSheet: View {
                         .font(.system(size: 12, weight: .light, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.3))
                     Spacer()
-                    Button("Delete video note", systemImage: "trash") {
-                        isPresented = false
-                        onDelete()
+                    HStack(spacing: 18) {
+                        Button("Share video note", systemImage: "square.and.arrow.up") {
+                            sharePayload = SharePayload(items: [recording.fileURL])
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.white.opacity(0.4))
+
+                        Button("Delete video note", systemImage: "trash") {
+                            isPresented = false
+                            onDelete()
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.red.opacity(0.5))
                     }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.red.opacity(0.5))
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 24)
@@ -225,6 +234,9 @@ struct VideoNoteSheet: View {
         .presentationBackground(Color.nocturneSheetBackground)
         .presentationDragIndicator(.hidden)
         .onDisappear { isPlaying = false }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(items: payload.items)
+        }
     }
 
     private func formatDate(_ date: Date) -> String {

@@ -137,9 +137,9 @@ struct LibraryView: View {
     // MARK: - Header
     private var headerView: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "moon.stars").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.65))
-                Text("Nocturne").foregroundStyle(.white.opacity(0.7)).font(.system(size: 11, weight: .medium)).kerning(4)
+                Text("Nocturne").foregroundStyle(.white.opacity(0.7)).font(.system(size: 13, weight: .medium)).kerning(4)
             }
             .padding(.bottom, 20)
 
@@ -150,7 +150,7 @@ struct LibraryView: View {
                 Spacer()
                 Button("Profile", systemImage: "person.circle") { showingProfile = true }
                     .labelStyle(.iconOnly)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             .padding(.horizontal, 28)
         }
