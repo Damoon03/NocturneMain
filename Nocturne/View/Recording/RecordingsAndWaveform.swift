@@ -185,7 +185,7 @@ struct RecordingsSheetView: View {
                                         Image(systemName: "video")
                                             .font(.system(size: 9, weight: .medium))
                                             .foregroundStyle(.white.opacity(0.3))
-                                        Text("VIDEO NOTES")
+                                        Text("VIDEO")
                                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                                             .kerning(1.5)
                                             .foregroundStyle(.white.opacity(0.3))
@@ -282,8 +282,8 @@ struct RecordingsSheetView: View {
                 Spacer()
                 DeleteConfirmSheet(
                     title: formatDate(recording.createdAt),
-                    heading: recording.kind == .video ? "Delete Video Note" : "Delete Recording",
-                    subtitle: "This \(recording.kind == .video ? "video note" : "recording") will be permanently deleted.",
+                    heading: recording.kind == .video ? "Delete Video" : "Delete Recording",
+                    subtitle: "This \(recording.kind == .video ? "video" : "recording") will be permanently deleted.",
                     onDelete: {
                         audioVM.delete(recording)
                         onDeleteRecording(recording)

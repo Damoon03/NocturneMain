@@ -25,7 +25,7 @@ struct VideoRecorderView: View {
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.white.opacity(0.4))
                     Spacer()
-                    Text("Video Note")
+                    Text("Video")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(.white.opacity(0.6))
                         .kerning(1)
@@ -152,28 +152,32 @@ struct VideoNoteSheet: View {
             Color.nocturneSheetBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HStack {
-                    Button("Close", systemImage: "xmark") { isPresented = false }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.white.opacity(0.4))
-                    Spacer()
+                ZStack {
                     Text(formatDate(recording.createdAt))
                         .font(.system(size: 12, weight: .light, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.3))
-                    Spacer()
-                    HStack(spacing: 18) {
-                        Button("Share video note", systemImage: "square.and.arrow.up") {
-                            sharePayload = SharePayload(items: [recording.fileURL])
-                        }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.white.opacity(0.4))
 
-                        Button("Delete video note", systemImage: "trash") {
-                            isPresented = false
-                            onDelete()
+                    HStack {
+                        Button("Close", systemImage: "xmark") { isPresented = false }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.white.opacity(0.4))
+
+                        Spacer()
+
+                        HStack(spacing: 18) {
+                            Button("Share video", systemImage: "square.and.arrow.up") {
+                                sharePayload = SharePayload(items: [recording.fileURL])
+                            }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.white.opacity(0.4))
+
+                            Button("Delete video", systemImage: "trash") {
+                                isPresented = false
+                                onDelete()
+                            }
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.red.opacity(0.5))
                         }
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.red.opacity(0.5))
                     }
                 }
                 .padding(.horizontal, 28)

@@ -53,7 +53,10 @@ class LibraryViewModel: ObservableObject {
     @discardableResult
     func update(_ song: Song) async -> Bool {
         guard let index = songs.firstIndex(where: { $0.id == song.id }) else { return false }
-        songs[index] = song
+        var updatedSong = song
+        updatedSong.updatedAt = Date()
+        songs.remove(at: index)
+        songs.insert(updatedSong, at: 0)
         return await saveSongs()
     }
 

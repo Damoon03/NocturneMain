@@ -53,8 +53,7 @@ struct ContentView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer()
-                
+
                 // MARK: - Title
                 HStack {
                     TextField("untitled", text: $viewModel.song.title)
@@ -667,7 +666,7 @@ struct ContentView: View {
                         viewModel.cancelPickingLineForNote()
                         
                         HapticManager.impact(.medium)
-                    }) {
+                    }) {                    
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 if let label = viewModel.sectionLabel(forLineIndex: lineIndex) {
