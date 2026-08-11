@@ -24,7 +24,9 @@ struct ContentView: View {
     @State private var editingNote: NoteEditContext? = nil
     @State private var noteText: String = ""
     @State private var sharePayload: SharePayload? = nil
+    @State private var showingShareOptions = false
     @State private var showingSectionChooser = false          // ← added
+    @State private var wordPickerWordFrames: [String: CGRect] = [:]
 
     var onSave: ((Song) async -> Bool)?
     var onDismiss: ((Song) async -> Void)?
@@ -53,7 +55,8 @@ struct ContentView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-
+                Spacer()
+                
                 // MARK: - Title
                 HStack {
                     TextField("untitled", text: $viewModel.song.title)
@@ -78,12 +81,21 @@ struct ContentView: View {
                     saveStatusLabel
                     Button("Share song link", systemImage: "link") {
                         HapticManager.impact(.light)
-                        if let items = SongShareOptions.linkItems(for: viewModel.song) {
-                            sharePayload = SharePayload(items: items)
-                        }
+                        showingShareOptions = true
                     }
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.white.opacity(0.4))
+                    .confirmationDialog("Share Song", isPresented: $showingShareOptions, titleVisibility: .visible) {
+                        Button("Share Link") {
+                            if let items = SongShareOptions.linkItems(for: viewModel.song) {
+                                sharePayload = SharePayload(items: items)
+                            }
+                        }
+                        Button("Share PDF") {
+                            shareSongAsPDF()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
                     Button("Song fragments", systemImage: "lightbulb") { showingFragments = true }
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.white.opacity(0.4))
@@ -288,6 +300,7 @@ struct ContentView: View {
                                     text: $viewModel.song.lyrics,
                                     fontSize: fontSize,
                                     lineSpacing: lineSpacing,
+                                    lyricsFont: settings.lyricsFont,
                                     isFocused: $isFocused
                                 )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -325,7 +338,7 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $viewModel.isAnnotating) {
-            ChordSheetView(viewModel: viewModel, settings: settings)
+            ChordSheetView(viewModel: viewModel)
         }
         .sheet(isPresented: $viewModel.isRhymeSheetPresented) {
             RhymeSheetView(viewModel: viewModel)
@@ -376,6 +389,21 @@ struct ContentView: View {
                 Task { _ = await onSave?(viewModel.song) }
             }
         }
+        .simultaneousGesture(
+            // Swipe right anywhere on the screen to go back to the library,
+            // mirroring what tapping the chevron does. Disabled while the
+            // lyrics editor has focus so it doesn't fight text selection
+            // or keyboard gestures.
+            DragGesture(minimumDistance: 24, coordinateSpace: .local)
+                .onEnded { value in
+                    guard !isFocused else { return }
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    guard horizontal > 80, abs(vertical) < 60 else { return }
+                    HapticManager.impact(.light)
+                    Task { await onDismiss?(viewModel.song) }
+                }
+        )
     }
 
     @ViewBuilder
@@ -489,6 +517,7 @@ struct ContentView: View {
             coordinateSpaceName: "lyricsCoordSpace",
             wordFrames: $wordFrames,
             isInteractive: true,
+            lyricsFont: settings.lyricsFont,
             onEditNote: { lineIndex in
                 noteText = viewModel.note(forLineIndex: lineIndex)?.text ?? ""
                 editingNote = NoteEditContext(lineIndex: lineIndex)
@@ -536,37 +565,68 @@ struct ContentView: View {
                                 .padding(.bottom, 4)
                         }
                         let lineChords = viewModel.chords(forLineIndex: lineIndex)
-                        if !lineChords.isEmpty {
-                            HStack(spacing: 10) {
-                                ForEach(lineChords) { chord in chordCapsuleGroup(for: chord, lineIndex: lineIndex) }
-                            }
-                            .padding(.bottom, 2)
-                        }
-                        FlowLayout(spacing: 0) {
-                            ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
-                                let globalIndex = globalWordIndex(lineIndex: lineIndex, wordIndex: wordItem.index)
-                                Button(action: {
-                                    viewModel.insertAnnotation(beforeWordAtIndex: globalIndex)
-                                    HapticManager.impact(.medium)
-                                }) {
-                                    Text(wordItem.word + " ")
-                                        .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-                                        .foregroundStyle(.white)
-                                        .underline(color: .white.opacity(0.25))
-                                        .fixedSize()
+                        let measureWords = !lineChords.isEmpty
+                        let lineIsRTL = TextDirection.isRTL(viewModel.lyricsLines[lineIndex])
+
+                        // Existing chords are anchored to each word's real
+                        // measured frame (same technique as lyricsDisplayView /
+                        // LyricsWithChordsView) rather than stacked in a plain
+                        // leading HStack — otherwise they visually detach from
+                        // their words and bunch up at the start of the line
+                        // while picking, snapping back only once this view is
+                        // replaced on "Done". ZStack alignment stays fixed at
+                        // .topLeading for both directions: word frames are
+                        // measured in absolute, left-origin coordinates, and
+                        // FlowLayout already fills the full row width and
+                        // handles RTL row-filling internally, so a fixed
+                        // .topLeading reference keeps the offset math correct
+                        // for LTR and RTL alike.
+                        ZStack(alignment: .topLeading) {
+                            FlowLayout(spacing: 0, isRTL: lineIsRTL) {
+                                ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
+                                    let globalIndex = globalWordIndex(lineIndex: lineIndex, wordIndex: wordItem.index)
+                                    Button(action: {
+                                        viewModel.insertAnnotation(beforeWordAtIndex: globalIndex)
+                                        HapticManager.impact(.medium)
+                                    }) {
+                                        Text(wordItem.word + " ")
+                                            .font(settings.lyricsFont.font(size: fontSize))
+                                            .foregroundStyle(.white)
+                                            .underline(color: .white.opacity(0.25))
+                                            .fixedSize()
+                                    }
+                                    .buttonStyle(.plain)
+                                    .wordFrameMeasurement(
+                                        lineIndex: lineIndex,
+                                        wordIndex: wordItem.index,
+                                        coordinateSpace: wordPickerCoordinateSpaceName,
+                                        enabled: measureWords
+                                    )
                                 }
-                                .buttonStyle(.plain)
+                            }
+                            .padding(.top, lineChords.isEmpty ? 0 : 22)
+
+                            ForEach(lineChords) { chord in
+                                let key = "\(lineIndex):\(chord.wordIndex)"
+                                if let frame = wordPickerWordFrames[key] {
+                                    chordCapsuleGroup(for: chord, lineIndex: lineIndex)
+                                        .offset(x: frame.minX - 14, y: 0)
+                                }
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: lineIsRTL ? .trailing : .leading)
                         .padding(.vertical, lineSpacing / 2)
                     }
                 }
             }
             .padding(.horizontal, 15).padding(.vertical, 10).padding(.bottom, 4)
+            .coordinateSpace(name: wordPickerCoordinateSpaceName)
+            .onPreferenceChange(WordFramePreferenceKey.self) { wordPickerWordFrames = $0 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    private let wordPickerCoordinateSpaceName = "wordPickerCoordSpace"
 
     // MARK: - Word picker (rhyme lookup)
     private var rhymePickerView: some View {
@@ -579,14 +639,14 @@ struct ContentView: View {
                             SectionLabelView(label: label) { viewModel.removeSection(atLineIndex: lineIndex) }
                                 .padding(.bottom, 4)
                         }
-                        FlowLayout(spacing: 0) {
+                        FlowLayout(spacing: 0, isRTL: TextDirection.isRTL(viewModel.lyricsLines[lineIndex])) {
                             ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
                                 Button(action: {
                                     viewModel.selectRhymeTarget(lineIndex: lineIndex, wordIndex: wordItem.index)
                                     HapticManager.impact(.medium)
                                 }) {
                                     Text(wordItem.word + " ")
-                                        .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                        .font(settings.lyricsFont.font(size: fontSize))
                                         .foregroundStyle(.white)
                                         .underline(color: .white.opacity(0.25))
                                         .fixedSize()
@@ -594,7 +654,7 @@ struct ContentView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: TextDirection.isRTL(viewModel.lyricsLines[lineIndex]) ? .trailing : .leading)
                         .padding(.vertical, lineSpacing / 2)
                     }
                 }
@@ -629,7 +689,7 @@ struct ContentView: View {
                                         .background(Capsule().fill(color.opacity(0.08)).overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5)))
                                 }
                                 Text(isBlank ? "(empty line)" : lineText)
-                                    .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                    .font(settings.lyricsFont.font(size: fontSize))
                                     .foregroundStyle(isBlank ? .white.opacity(0.2) : .white)
                                     .italic(isBlank)
                                     .multilineTextAlignment(.leading)
@@ -679,7 +739,7 @@ struct ContentView: View {
                                         .background(Capsule().fill(color.opacity(0.08)).overlay(Capsule().stroke(color.opacity(0.25), lineWidth: 0.5)))
                                 }
                                 Text(isBlank ? "(empty line)" : lineText)
-                                    .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                    .font(settings.lyricsFont.font(size: fontSize))
                                     .foregroundStyle(isBlank ? .white.opacity(0.2) : .white)
                                     .italic(isBlank)
                                     .multilineTextAlignment(.leading)
@@ -702,6 +762,16 @@ struct ContentView: View {
         var count = 0
         for i in 0..<lineIndex { count += viewModel.wordsInLine(i).count }
         return count + wordIndex
+    }
+
+    private func shareSongAsPDF() {
+        Task {
+            let data = SongExporter.pdf(for: viewModel.song)
+            let fileName = SongExporter.sanitizedFileName(for: viewModel.song.title) + ".pdf"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            guard (try? data.write(to: url)) != nil else { return }
+            await MainActor.run { sharePayload = SharePayload(items: [url]) }
+        }
     }
 }
 

@@ -21,6 +21,7 @@ struct Song: Identifiable, Codable, Hashable {
     var sectionLabels: [SectionLabel] = []
     var recordings: [Recording] = []
     var chords: [Chord] = []
+    var recentChords: [String] = []         // most-recently-used chord names, this song only
     var notes: [SongNote] = []              // inline lyric notes (feature 4)
     var mainRecordingIDs: [UUID] = []       // feature 6: pinned "main" recordings
     var folderID: UUID? = nil               // feature 2: folder assignment
@@ -34,6 +35,7 @@ struct Song: Identifiable, Codable, Hashable {
         sectionLabels: [SectionLabel] = [],
         recordings: [Recording] = [],
         chords: [Chord] = [],
+        recentChords: [String] = [],
         notes: [SongNote] = [],
         mainRecordingIDs: [UUID] = [],
         folderID: UUID? = nil,
@@ -46,6 +48,7 @@ struct Song: Identifiable, Codable, Hashable {
         self.sectionLabels = sectionLabels
         self.recordings = recordings
         self.chords = chords
+        self.recentChords = recentChords
         self.notes = notes
         self.mainRecordingIDs = mainRecordingIDs
         self.folderID = folderID
@@ -56,7 +59,7 @@ struct Song: Identifiable, Codable, Hashable {
     // Custom decoding so existing saved songs (from before `updatedAt` existed)
     // load fine instead of failing to decode — missing key just defaults to "now".
     enum CodingKeys: String, CodingKey {
-        case id, title, lyrics, sectionLabels, recordings, chords, notes, mainRecordingIDs, folderID, deletedAt, updatedAt
+        case id, title, lyrics, sectionLabels, recordings, chords, recentChords, notes, mainRecordingIDs, folderID, deletedAt, updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +70,7 @@ struct Song: Identifiable, Codable, Hashable {
         sectionLabels = try c.decodeIfPresent([SectionLabel].self, forKey: .sectionLabels) ?? []
         recordings = try c.decodeIfPresent([Recording].self, forKey: .recordings) ?? []
         chords = try c.decodeIfPresent([Chord].self, forKey: .chords) ?? []
+        recentChords = try c.decodeIfPresent([String].self, forKey: .recentChords) ?? []
         notes = try c.decodeIfPresent([SongNote].self, forKey: .notes) ?? []
         mainRecordingIDs = try c.decodeIfPresent([UUID].self, forKey: .mainRecordingIDs) ?? []
         folderID = try c.decodeIfPresent(UUID.self, forKey: .folderID)
@@ -82,6 +86,7 @@ struct Song: Identifiable, Codable, Hashable {
         try c.encode(sectionLabels, forKey: .sectionLabels)
         try c.encode(recordings, forKey: .recordings)
         try c.encode(chords, forKey: .chords)
+        try c.encode(recentChords, forKey: .recentChords)
         try c.encode(notes, forKey: .notes)
         try c.encode(mainRecordingIDs, forKey: .mainRecordingIDs)
         try c.encodeIfPresent(folderID, forKey: .folderID)

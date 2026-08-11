@@ -7,6 +7,7 @@ import SwiftUI
 
 struct SongContextPreview: View {
     let song: Song
+    var lyricsFont: LyricsFontOption = .monospaced
 
     private var previewLines: [String] {
         song.lyrics.components(separatedBy: "\n")
@@ -37,7 +38,7 @@ struct SongContextPreview: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(previewLines.enumerated()), id: \.element) { idx, line in
                         Text(line)
-                            .font(.system(size: 13, weight: .regular, design: .monospaced))
+                            .font(lyricsFont.font(size: 13))
                             .foregroundStyle(.white.opacity(idx == 0 ? 0.75 : max(0.1, 0.35 - Double(idx) * 0.03)))
                             .lineLimit(1)
                     }

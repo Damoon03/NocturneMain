@@ -48,7 +48,6 @@ struct TransposeView: View {
 
 struct ChordSheetView: View {
     @ObservedObject var viewModel: SongViewModel
-    @ObservedObject var settings: SettingsStore
     private var hasChords: Bool { viewModel.hasChords }
 
     var body: some View {
@@ -60,18 +59,18 @@ struct ChordSheetView: View {
                     .foregroundStyle(.gray).font(.system(size: 13)).multilineTextAlignment(.center).padding(.horizontal)
 
                 // Recent chords — tap to skip typing and go straight into
-                // word-picking mode.
-                if !settings.recentChords.isEmpty {
+                // word-picking mode. Scoped to this song only.
+                if !viewModel.song.recentChords.isEmpty {
                     HStack(spacing: 10) {
                         Text("Recent:")
                             .foregroundStyle(.gray)
                             .font(.system(size: 14, weight: .medium))
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(settings.recentChords, id: \.self) { name in
+                                ForEach(viewModel.song.recentChords, id: \.self) { name in
                                     Button(action: {
                                         HapticManager.impact(.light)
-                                        settings.pushRecentChord(name)
+                                        viewModel.pushRecentChord(name)
                                         viewModel.quickPlaceChord(name)
                                     }) {
                                         Text(name)
@@ -101,7 +100,7 @@ struct ChordSheetView: View {
                     }
                 Button(action: {
                     let typed = viewModel.annotationText.trimmingCharacters(in: .whitespaces)
-                    if !typed.isEmpty { settings.pushRecentChord(String(typed.prefix(10))) }
+                    if !typed.isEmpty { viewModel.pushRecentChord(String(typed.prefix(10))) }
                     viewModel.confirmAnnotation()
                 }) {
                     Text("Choose Word →")

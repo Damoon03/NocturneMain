@@ -143,6 +143,17 @@ struct ProfileView: View {
 
                     Spacer().frame(height: 14)
 
+                    // ── Lyrics font ─────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeader("Lyrics font")
+                        LyricsFontPickerView(selection: $settings.lyricsFont)
+                    }
+                    .padding(20)
+                    .background(cardBG)
+                    .padding(.horizontal, 20)
+
+                    Spacer().frame(height: 14)
+
                     // ── Security ───────────────────────────────────────
                     VStack(alignment: .leading, spacing: 16) {
                         sectionHeader("Security")

@@ -12,6 +12,7 @@ struct LyricsWithChordsView: View {
     let coordinateSpaceName: String
     @Binding var wordFrames: [String: CGRect]
     var isInteractive: Bool = true
+    var lyricsFont: LyricsFontOption = .monospaced
     var onEditNote: ((Int) -> Void)?
 
     var body: some View {
@@ -42,13 +43,26 @@ struct LyricsWithChordsView: View {
 
             let lineChords = viewModel.chords(forLineIndex: lineIndex)
             let measureWords = !lineChords.isEmpty
+            let lineIsRTL = TextDirection.isRTL(viewModel.lyricsLines[lineIndex])
 
+            // ZStack alignment is intentionally fixed at .topLeading regardless
+            // of line direction. FlowLayout already fills the full proposed
+            // width (see FlowLayout.sizeThatFits), so this alignment has no
+            // effect on how words are laid out — RTL row-filling is handled
+            // entirely inside FlowLayout via `isRTL`. What alignment *does*
+            // control is the default, pre-offset anchor point for the chord
+            // capsule overlay below. Word frames are measured in absolute,
+            // left-origin coordinates (WordFrameMeasurement uses
+            // `geo.frame(in: .named(coordinateSpace))`), so the offset math
+            // `frame.minX - 14` is only correct when the overlay's own
+            // untransformed position also starts at the left edge — i.e.
+            // alignment must stay .topLeading for both directions.
             ZStack(alignment: .topLeading) {
-                FlowLayout(spacing: 0) {
+                FlowLayout(spacing: 0, isRTL: lineIsRTL) {
                     ForEach(viewModel.wordItems(inLine: lineIndex)) { wordItem in
                         HStack(spacing: 0) {
                             Text(wordItem.word)
-                                .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                .font(lyricsFont.font(size: fontSize))
                                 .foregroundStyle(.white)
                                 .wordFrameMeasurement(
                                     lineIndex: lineIndex,
@@ -57,7 +71,7 @@ struct LyricsWithChordsView: View {
                                     enabled: measureWords
                                 )
                             Text(" ")
-                                .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+                                .font(lyricsFont.font(size: fontSize))
                                 .foregroundStyle(.white)
                         }
                     }

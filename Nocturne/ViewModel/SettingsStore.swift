@@ -17,6 +17,11 @@ class SettingsStore: ObservableObject {
         didSet { UserDefaults.standard.set(fontSize, forKey: "nocturne_fontSize") }
     }
 
+    // MARK: - Lyrics font
+    @Published var lyricsFont: LyricsFontOption {
+        didSet { UserDefaults.standard.set(lyricsFont.rawValue, forKey: "nocturne_lyricsFont") }
+    }
+
     // MARK: - App icon
     @Published var selectedIconName: String? {
         didSet {
@@ -39,16 +44,12 @@ class SettingsStore: ObservableObject {
     /// Last known total word count per song id (to compute deltas)
     private var lastWordCounts: [UUID: Int] = [:]
 
-    // MARK: - Recent chords (quick-pick strip in ChordSheetView)
-    @Published var recentChords: [String] {
-        didSet { saveRecentChords() }
-    }
-    private let recentChordsLimit = 8
-    private static let defaultRecentChords = ["Am", "C", "G", "F", "Em", "D"]
-
     init() {
         let storedSize = UserDefaults.standard.double(forKey: "nocturne_fontSize")
         fontSize = storedSize < 10 ? 13 : storedSize
+
+        let storedFontRaw = UserDefaults.standard.string(forKey: "nocturne_lyricsFont")
+        lyricsFont = storedFontRaw.flatMap(LyricsFontOption.init(rawValue:)) ?? .monospaced
 
         biometricLockEnabled = UserDefaults.standard.bool(forKey: "nocturne_biometricLock")
 
@@ -64,29 +65,8 @@ class SettingsStore: ObservableObject {
             storedIconName = nil
         }
         selectedIconName = storedIconName
-
-        let storedRecentChords = UserDefaults.standard.stringArray(forKey: "nocturne_recentChords")
-        recentChords = (storedRecentChords?.isEmpty == false) ? storedRecentChords! : Self.defaultRecentChords
     }
 
-    // MARK: - Recent chords
-
-    /// Moves `name` to the front of the recent-chords list (case-insensitive
-    /// de-dupe), capped at `recentChordsLimit`.
-    func pushRecentChord(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        var next = recentChords.filter { $0.lowercased() != trimmed.lowercased() }
-        next.insert(trimmed, at: 0)
-        if next.count > recentChordsLimit {
-            next = Array(next.prefix(recentChordsLimit))
-        }
-        recentChords = next
-    }
-
-    private func saveRecentChords() {
-        UserDefaults.standard.set(recentChords, forKey: "nocturne_recentChords")
-    }
 
     // MARK: - Word count tracking
 

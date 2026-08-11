@@ -209,6 +209,25 @@ class SongViewModel: ObservableObject {
 
     var hasChords: Bool { !song.chords.isEmpty }
 
+    // MARK: - Recent chords (song-specific)
+
+    private let recentChordsLimit = 8
+
+    /// Moves `name` to the front of this song's recent-chords list
+    /// (case-insensitive de-dupe), capped at `recentChordsLimit`. Scoped
+    /// to `song` so switching songs shows that song's own chord history,
+    /// not a global one.
+    func pushRecentChord(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var next = song.recentChords.filter { $0.lowercased() != trimmed.lowercased() }
+        next.insert(trimmed, at: 0)
+        if next.count > recentChordsLimit {
+            next = Array(next.prefix(recentChordsLimit))
+        }
+        song.recentChords = next
+    }
+
     // MARK: - Rhyme flow
 
     /// Enters rhyme word-picking mode (tap a lyric word to look up rhymes for it).

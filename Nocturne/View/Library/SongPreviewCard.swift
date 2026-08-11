@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SongPreviewCard: View {
     let song: Song
+    var lyricsFont: LyricsFontOption = .monospaced
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -18,7 +19,7 @@ struct SongPreviewCard: View {
                 .foregroundStyle(.white)
 
             Text(previewLyrics)
-                .font(.system(size: 13, design: .monospaced))
+                .font(lyricsFont.font(size: 13))
                 .foregroundStyle(.white.opacity(0.6))
                 .lineLimit(5)
 

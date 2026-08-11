@@ -139,7 +139,7 @@ struct LibraryView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "moon.stars").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.65))
-                Text("Nocturne").foregroundStyle(.white.opacity(0.7)).font(.system(size: 11, weight: .medium)).kerning(4)
+                Text("Nocturne").foregroundStyle(.white.opacity(0.7)).font(.system(size: 13, weight: .medium)).kerning(4)
             }
             .padding(.bottom, 20)
 
@@ -150,7 +150,7 @@ struct LibraryView: View {
                 Spacer()
                 Button("Profile", systemImage: "person.circle") { showingProfile = true }
                     .labelStyle(.iconOnly)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(0.5))
             }
             .padding(.horizontal, 28)
         }
@@ -291,7 +291,7 @@ struct LibraryView: View {
                 Button(role: .destructive) { songToDelete = song } label: {
                     Label("Delete", systemImage: "trash")
                 }
-            } preview: { SongContextPreview(song: song) }
+            } preview: { SongContextPreview(song: song, lyricsFont: settings.lyricsFont) }
     }
 
     // MARK: - Song row UI
@@ -306,7 +306,7 @@ struct LibraryView: View {
                 Text(song.title.isEmpty ? "Untitled" : song.title)
                     .foregroundStyle(.white.opacity(0.85)).font(.system(size: 15, weight: .regular))
                 Text(previewText(for: song))
-                    .foregroundStyle(.white.opacity(0.25)).font(.system(size: 12, weight: .regular, design: .monospaced)).lineLimit(1)
+                    .foregroundStyle(.white.opacity(0.25)).font(settings.lyricsFont.font(size: 12)).lineLimit(1)
             }
             Spacer()
             if !song.mainRecordingIDs.isEmpty {
@@ -350,17 +350,10 @@ struct LibraryView: View {
     private func shareSong(_ song: Song) {
         Task {
             let data = SongExporter.pdf(for: song)
-            let fileName = sanitize(song.title) + ".pdf"
+            let fileName = SongExporter.sanitizedFileName(for: song.title) + ".pdf"
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
             guard (try? data.write(to: url)) != nil else { return }
             await MainActor.run { sharePayload = SharePayload(items: [url]) }
         }
-    }
-
-    private func sanitize(_ title: String) -> String {
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = t.isEmpty ? "Untitled" : t
-        let invalid = CharacterSet(charactersIn: "/\\?%*|\"<>:")
-        return name.components(separatedBy: invalid).joined(separator: "-")
     }
 }

@@ -138,6 +138,17 @@ struct SongExporter {
         return data
     }
 
+    // MARK: - Filename helper
+
+    /// Sanitizes a song title into a safe filename component (no path
+    /// separators or other characters the filesystem disallows).
+    static func sanitizedFileName(for title: String) -> String {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = t.isEmpty ? "Untitled" : t
+        let invalid = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+        return name.components(separatedBy: invalid).joined(separator: "-")
+    }
+
     private static func drawChordRow(_ chords: [Chord], lyric: String, font: UIFont, chordFont: UIFont, origin: CGPoint) {
         let words = lyric.components(separatedBy: " ").filter { !$0.isEmpty }
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
+    var isRTL: Bool = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = computeRows(proposal: proposal, subviews: subviews)
@@ -20,12 +21,25 @@ struct FlowLayout: Layout {
         let rows = computeRows(proposal: proposal, subviews: subviews)
         var y = bounds.minY
         for row in rows {
-            var x = bounds.minX
             let rowHeight = row.map { subviews[$0].sizeThatFits(.unspecified).height }.max() ?? 0
-            for index in row {
-                let size = subviews[index].sizeThatFits(.unspecified)
-                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-                x += size.width + spacing
+            if isRTL {
+                // Words stay in logical (reading) order for correct row-wrapping,
+                // but we fill each row from the trailing edge inward so the
+                // whole line reads right-to-left, matching RTL scripts.
+                var x = bounds.maxX
+                for index in row {
+                    let size = subviews[index].sizeThatFits(.unspecified)
+                    x -= size.width
+                    subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                    x -= spacing
+                }
+            } else {
+                var x = bounds.minX
+                for index in row {
+                    let size = subviews[index].sizeThatFits(.unspecified)
+                    subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                    x += size.width + spacing
+                }
             }
             y += rowHeight + spacing
         }
